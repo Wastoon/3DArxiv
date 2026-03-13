@@ -1,16 +1,36 @@
 site_title = "MyArxiv"
-limit_days = 7
+limit_days = 30
 cache_url = "https://Wastoon.github.io/MyArxiv/cache.json"
+
+[[sources]]
+limit = 300
+category = "cs.RO"
+title = "Robotics"
+
+[[sources]]
+limit = 100
+category = "(cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.RO)+AND+(video+AND+world+AND+model)"
+title = "Video World Models"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.RO+OR+cat:cs.AI)+AND+(embodied+OR+manipulation+OR+VLA+OR+dexterous)"
+title = "Embodied Intelligence"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.CV+OR+cat:cs.RO)+AND+(end-to-end+OR+BEV+OR+occupancy+OR+planning+foundation)"
+title = "End-to-End AD"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.RO+OR+cat:cs.AI+OR+cat:cs.LG)+AND+(foundation+model+OR+multimodal+OR+generalist+agent)"
+title = "Foundation Models"
 
 [[sources]]
 limit = 150
 category = "cs.CL"
 title = "Computation and Language"
-
-[[sources]]
-limit = 150
-category = "cs.CV"
-title = "Computer Vision and Pattern Recognition"
 
 [[sources]]
 limit = 150
@@ -26,6 +46,7 @@ title = "Machine Learning"
 limit = 150
 category = "cs.MM"
 title = "Multimedia"
+
 
 [scripts]
 highlight_title = "scripts/highlight_title.rhai"
