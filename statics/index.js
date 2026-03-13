@@ -64,8 +64,8 @@ function collectData() {
       const papers = sb.querySelectorAll('.paper-item');
       let count = papers.length, featured = 0;
       papers.forEach(p => {
-        const star = p.querySelector('.paper-star-col')?.textContent || '';
-        const hasStar = star.includes('★');
+        const titleText = p.querySelector('.paper-title-wrap')?.textContent || '';
+        const hasStar = titleText.includes('★');
         const hasConf = p.dataset.conference === '1';
         if (hasStar || hasConf) featured++;
         // cache for search
@@ -123,28 +123,32 @@ let featuredOnly = false;
 
 function filterPapers() {
   const q = (searchInput?.value || '').toLowerCase().trim();
-  let visible = 0;
 
   document.querySelectorAll('.paper-item').forEach(item => {
-    const star = item.querySelector('.paper-star-col')?.textContent || '';
-    const hasStar = star.includes('★');
+    // Get searchable text from visible elements
+    const titleText = item.querySelector('.paper-title-wrap')?.textContent?.toLowerCase() || '';
+    const authorsText = item.querySelector('.paper-authors')?.textContent?.toLowerCase() || '';
+    const abstractText = item.querySelector('.paper-abstract')?.textContent?.toLowerCase() || '';
+
+    const hasStar = titleText.includes('★');
     const hasConf = item.dataset.conference === '1';
-    const text = item.dataset.searchText || '';
-    const matchQ = !q || text.includes(q);
+
+    const matchQ = !q || titleText.includes(q) || authorsText.includes(q) || abstractText.includes(q);
     const matchF = !featuredOnly || hasStar || hasConf;
     const show = matchQ && matchF;
     item.style.display = show ? '' : 'none';
-    if (show) visible++;
   });
 
-  // Hide empty subject blocks, hide empty days
+  // Hide empty subject blocks
   document.querySelectorAll('.subject-block').forEach(sb => {
-    const has = [...sb.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
-    sb.style.display = has ? '' : 'none';
+    const hasVisible = [...sb.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
+    sb.style.display = hasVisible ? '' : 'none';
   });
+
+  // Hide empty day sections
   document.querySelectorAll('.day-section').forEach(d => {
-    const has = [...d.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
-    d.style.display = has ? '' : 'none';
+    const hasVisible = [...d.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
+    d.style.display = hasVisible ? '' : 'none';
   });
 }
 
@@ -384,73 +388,48 @@ updateBMCount();
 renderBMPanel();
 
 // ─── AI Summary ────────────────────────
+// Opens Claude.ai in a new tab with the abstract pre-filled as a prompt.
+// This works without any API key or CORS issues.
 document.querySelectorAll('.ai-summary-btn').forEach(btn => {
-  // Grab abstract from nearby DOM
-  btn.addEventListener('click', async e => {
+  btn.addEventListener('click', e => {
     e.stopPropagation();
 
-    const panel = btn.parentElement.parentElement.querySelector('.ai-panel');
-
-    // Toggle if already loaded
-    if (btn.dataset.loaded === '1') {
-      if (panel) panel.classList.toggle('hidden');
-      return;
-    }
-
-    const abstractEl = btn.closest('.paper-body')?.querySelector('.paper-abstract');
+    const paperBody = btn.closest('.paper-body');
+    const abstractEl = paperBody?.querySelector('.paper-abstract');
     const abstract = abstractEl?.textContent?.trim() || '';
     const title = btn.dataset.title || '';
 
-    btn.classList.add('loading');
-    btn.innerHTML = '<i class="ri-loader-4-line"></i> 生成中…';
-
-    try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 800,
-          messages: [{
-            role: 'user',
-            content: `请对以下学术论文进行简洁的中文解读，格式如下（不要有多余的文字）：
-
-**一句话总结：** [用一句话说明这篇论文做了什么]
-
-**核心方法：** [2-3句话描述方法]
-
-**主要结论：** [1-2句话总结结论]
-
-论文标题：${title}
-
-摘要原文：
-${abstract}`
-          }]
-        })
-      });
-
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || '获取失败，请稍后重试。';
-
-      // Find or create panel
-      let aiPanel = btn.closest('.paper-body')?.querySelector('.ai-panel');
-      if (!aiPanel) {
-        aiPanel = document.createElement('div');
-        aiPanel.className = 'ai-panel';
-        btn.closest('.paper-actions').after(aiPanel);
-      }
-
-      aiPanel.innerHTML = `<div class="ai-panel-hd"><i class="ri-sparkling-2-line"></i> AI 中文解读</div>`
-        + text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
-
-      btn.dataset.loaded = '1';
-      btn.classList.remove('loading');
-      btn.innerHTML = '<i class="ri-sparkling-2-line"></i> AI 摘要';
-
-    } catch(err) {
-      btn.classList.remove('loading');
-      btn.innerHTML = '<i class="ri-sparkling-2-line"></i> AI 摘要';
-      console.error(err);
+    // If already have a cached panel, just toggle it
+    const existing = paperBody?.querySelector('.ai-panel');
+    if (existing) {
+      existing.classList.toggle('hidden');
+      return;
     }
+
+    // Build Claude prompt and open in new tab
+    const prompt = `请对以下学术论文进行简洁的中文解读：
+
+**论文标题：** ${title}
+
+**摘要原文：**
+${abstract}
+
+请用以下格式回答：
+**一句话总结：** [用一句话说明这篇论文做了什么]
+**核心方法：** [2-3句话描述核心方法]
+**主要结论：** [1-2句话总结实验结论]`;
+
+    const claudeUrl = 'https://claude.ai/new?q=' + encodeURIComponent(prompt);
+    window.open(claudeUrl, '_blank', 'noopener');
+
+    // Show a small hint panel
+    const aiPanel = document.createElement('div');
+    aiPanel.className = 'ai-panel';
+    aiPanel.innerHTML = `<div class="ai-panel-hd"><i class="ri-sparkling-2-line"></i> AI 中文解读</div>
+      <div style="font-size:.82rem;color:var(--c-text2);line-height:1.7">
+        已在新标签页打开 Claude，论文摘要已自动填入。<br>
+        <span style="color:var(--c-text3);font-size:.78rem">提示：你也可以在仓库中配置 GitHub Actions 来自动预生成所有摘要。</span>
+      </div>`;
+    btn.closest('.paper-actions').after(aiPanel);
   });
 });
