@@ -45,6 +45,7 @@
                 <i class="ri-search-line search-icon"></i>
                 <input type="text" id="search-input" placeholder="搜索标题、作者、摘要… (Press / )" autocomplete="off" spellcheck="false"/>
                 <kbd class="search-shortcut">/</kbd>
+                <div id="search-history-dropdown" class="search-history-dropdown hidden"></div>
             </div>
             <button id="featured-toggle" title="只看精选 (顶级作者 / 顶会)">
                 <i class="ri-award-line"></i><span>精选</span>
@@ -52,6 +53,9 @@
         </div>
 
         <div class="header-actions">
+            <button id="nav-btn" class="hbtn" title="领域导航">
+                <i class="ri-map-2-line"></i>
+            </button>
             <button id="stats-btn" class="hbtn" title="统计图表">
                 <i class="ri-bar-chart-2-line"></i>
             </button>
@@ -130,6 +134,8 @@
         <span id="sb-days" class="sb-stat">— 天</span>
         <span class="sb-sep">·</span>
         <span id="sb-top" class="sb-stat sb-highlight">— 篇精选</span>
+        <span class="sb-sep">·</span>
+        <span id="sb-read" class="sb-stat sb-read">已读 — 篇</span>
         <span class="sb-right">
             <kbd class="kb">Tab</kbd> 展开/折叠全部
             &nbsp;&nbsp;
@@ -151,7 +157,7 @@
     </div>
 
     {{#each subjects}}
-    <div class="subject-block">
+    <div class="subject-block" id="subj-{{subject}}">
         <details>
             <summary class="subject-summary">
                 <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 4.293a1 1 0 011.414 0L14.414 10l-5.707 5.707a1 1 0 01-1.414-1.414L11.586 10 7.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
@@ -164,6 +170,7 @@
                      data-title="{{title}}"
                      data-authors="{{authors}}"
                      data-comment="{{comment}}"
+                     data-id="{{id}}"
                      data-conference="{{#if comment}}1{{else}}0{{/if}}">
                     <details>
                         <summary class="paper-summary">
@@ -183,6 +190,11 @@
                                 <button class="paction paction--ai ai-summary-btn"
                                         data-title="{{title}}">
                                     <i class="ri-sparkling-2-line"></i> AI 中文摘要
+                                </button>
+                                <button class="paction paction--read read-btn"
+                                        data-id="{{id}}"
+                                        title="标记为已读">
+                                    <i class="ri-eye-line"></i>
                                 </button>
                                 <button class="paction paction--bm bookmark-btn"
                                         data-id="{{id}}"
@@ -224,6 +236,18 @@
     </div>
     <div class="bp-footer">
         <button id="bp-export" class="bp-export-btn"><i class="ri-download-line"></i> 导出为文本</button>
+    </div>
+</aside>
+
+<!-- ═══════ NAV PANEL ═══════ -->
+<aside id="nav-panel" class="nav-panel hidden">
+    <div class="nav-panel-hd">
+        <span><i class="ri-map-2-line"></i> 领域导航</span>
+        <button id="nav-close"><i class="ri-close-line"></i></button>
+    </div>
+    <div id="nav-panel-body" class="nav-panel-body"></div>
+    <div class="nav-panel-ft">
+        <span id="nav-dedupe-info" class="nav-dedupe-info"></span>
     </div>
 </aside>
 
