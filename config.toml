@@ -1,11 +1,40 @@
-site_title = "MyArxiv"
+site_title = "3DArxiv"
 limit_days = 30
-cache_url = "https://Wastoon.github.io/MyArxiv/cache.json"
+cache_url = "https://wastoon.github.io/3DArxiv/cache.json"
 
 [[sources]]
 limit = 300
 category = "cs.RO"
 title = "Robotics"
+
+########################
+# 3D Vision
+########################
+
+[[sources]]
+limit = 120
+category = "(cat:cs.CV)+AND+(3D+OR+reconstruction+OR+multiview)"
+title = "3D Vision"
+
+
+########################
+# NeRF
+########################
+
+[[sources]]
+limit = 80
+category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(NeRF+OR+neural+radiance)"
+title = "NeRF"
+
+
+########################
+# Gaussian Splatting
+########################
+
+[[sources]]
+limit = 60
+category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(gaussian+splatting)"
+title = "Gaussian Splatting"
 
 [[sources]]
 limit = 100
