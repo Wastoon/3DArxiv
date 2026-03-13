@@ -64,16 +64,11 @@ function collectData() {
       const papers = sb.querySelectorAll('.paper-item');
       let count = papers.length, featured = 0;
       papers.forEach(p => {
-        const titleText = p.querySelector('.paper-title-wrap')?.textContent || '';
-        const hasStar = titleText.includes('★');
+        // data-search is built by the search cache block below; use data-title for star detection here
+        const titleText = (p.dataset.title || '').toLowerCase();
+        const hasStar = p.querySelector('.paper-title-wrap')?.textContent?.includes('★') || false;
         const hasConf = p.dataset.conference === '1';
         if (hasStar || hasConf) featured++;
-        // cache for search
-        p.dataset.searchText = [
-          p.dataset.title || '',
-          p.dataset.authors || '',
-          p.querySelector('.paper-abstract')?.textContent || ''
-        ].join(' ').toLowerCase();
       });
       subjects[name] = { count, featured };
       dayTotal += count;
@@ -121,22 +116,34 @@ const searchInput = document.getElementById('search-input');
 const featuredToggle = document.getElementById('featured-toggle');
 let featuredOnly = false;
 
+// Build search cache at page load from data-* attributes (always available,
+// regardless of whether details is open or closed).
+// Covers: title, authors, abstract (in paper-abstract), comment (conference info).
+document.querySelectorAll('.paper-item').forEach(item => {
+  const title   = (item.dataset.title   || '').toLowerCase();
+  const authors = (item.dataset.authors || '').toLowerCase();
+  const comment = (item.dataset.comment || '').toLowerCase();
+  // abstract lives in the DOM but details may be collapsed — read it now while
+  // the browser has it in the DOM tree regardless of open state.
+  const abstract = (item.querySelector('.paper-abstract')?.textContent || '').toLowerCase();
+  // subject name (parent .subject-name) — lets you search by topic too
+  const subject = (item.closest('.subject-block')?.querySelector('.subject-name')?.textContent || '').toLowerCase();
+
+  item.dataset.search = [title, authors, abstract, comment, subject].join(' ');
+  item.dataset.hasStar = title.includes('★') || item.querySelector('.paper-title-wrap')?.textContent?.includes('★') ? '1' : '0';
+});
+
 function filterPapers() {
   const q = (searchInput?.value || '').toLowerCase().trim();
 
   document.querySelectorAll('.paper-item').forEach(item => {
-    // Get searchable text from visible elements
-    const titleText = item.querySelector('.paper-title-wrap')?.textContent?.toLowerCase() || '';
-    const authorsText = item.querySelector('.paper-authors')?.textContent?.toLowerCase() || '';
-    const abstractText = item.querySelector('.paper-abstract')?.textContent?.toLowerCase() || '';
+    const searchText = item.dataset.search || '';
+    const hasStar    = item.dataset.hasStar === '1';
+    const hasConf    = item.dataset.conference === '1';
 
-    const hasStar = titleText.includes('★');
-    const hasConf = item.dataset.conference === '1';
-
-    const matchQ = !q || titleText.includes(q) || authorsText.includes(q) || abstractText.includes(q);
+    const matchQ = !q || searchText.includes(q);
     const matchF = !featuredOnly || hasStar || hasConf;
-    const show = matchQ && matchF;
-    item.style.display = show ? '' : 'none';
+    item.style.display = (matchQ && matchF) ? '' : 'none';
   });
 
   // Hide empty subject blocks
