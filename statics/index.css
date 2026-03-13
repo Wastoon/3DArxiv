@@ -364,13 +364,15 @@ details[open] { display: block; }
   font-size: .85rem; color: var(--c-star);
   padding-top: 2px; line-height: 1;
 }
-.paper-title-wrap { flex: 1; min-width: 0; }
-.paper-title {
+.paper-title-wrap {
+  flex: 1; min-width: 0;
   font-size: .87rem; font-weight: 500; color: var(--c-text);
-  line-height: 1.5; transition: color var(--t);
+  line-height: 1.55; transition: color var(--t);
 }
-.paper-item details[open] .paper-title { color: var(--c-accent-h); }
-[data-theme="dark"] .paper-item details[open] .paper-title { color: var(--c-accent); }
+.paper-item details[open] .paper-title-wrap { color: var(--c-accent-h); }
+[data-theme="dark"] .paper-item details[open] .paper-title-wrap { color: var(--c-accent); }
+/* Keep red highlights always red even when expanded */
+.paper-title-wrap .highlight-title { color: var(--c-red) !important; font-weight: 700; }
 
 .paper-chevron {
   flex-shrink: 0; width: 14px; height: 14px; color: var(--c-text3);
