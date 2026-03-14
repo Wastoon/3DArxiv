@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyArxiv Pro - 完整示例</title>
+</head>
+<body>
+    <!-- 包含新的 UI 和所有功能 -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <script src="./js/search-sort.js"></script>
+    <script src="./js/api-integration.js"></script>
+
+    <script>
+        /**
+         * MyArxiv Pro - 完整集成示例
+         * 本脚本展示如何整合所有新功能
+         */
+
+        class MyArxivPro {
+            constructor() {
+                this.papers = [];
+                this.searchEngine = null;
+                this.bookmarks = new BookmarkManager();
+                this.enhancer = new PaperEnhancer();
+                this.init();
+            }
+
+            /**
+             * 初始化应用
+             */
+            async init() {
+                console.log('🚀 MyArxiv Pro 启动中...');
+                
+                try {
+                    // 1. 加载论文数据
+                    await this.loadPapers();
+                    console.log(`✅ 加载 ${this.papers.length} 篇论文`);
+
+                    // 2. 初始化搜索引擎
+                    this.initSearchEngine();
+                    console.log('✅ 搜索引擎就绪');
+
+                    // 3. 增强论文数据（获取引用数等）
+                    await this.enrichPapers();
+                    console.log('✅ 论文数据增强完成');
+
+                    // 4. 初始化 UI 事件
+                    this.setupEventListeners();
+                    console.log('✅ 事件监听器已绑定');
+
+                    // 5. 渲染初始页面
+                    this.render();
+                    console.log('✅ 页面已渲染');
+
+                    // 6. 显示统计信息
+                    this.showStats();
+                    console.log('✅ 统计信息已显示');
+
+                } catch (error) {
+                    console.error('❌ 初始化失败:', error);
+                }
+            }
+
+            /**
+             * 加载论文数据
+             */
+            async loadPapers() {
+                try {
+                    const response = await fetch('./cache.json');
+                    const data = await response.json();
+                    
+                    // 合并论文列表
+                    this.papers = (data.papers || data)
+                        .map((paper, index) => ({
+                            ...paper,
+                            id: paper.id || `paper-${index}`,
+                            date: paper.date || paper.published || new Date().toISOString(),
+                            authors: paper.authors || [],
+                            abstract: paper.abstract || paper.summary || '',
+                            url: paper.url || paper.pdf_url || '#'
+                        }));
+
+                    return this.papers;
+                } catch (error) {
+                    console.warn('⚠️ 无法加载 cache.json，使用示例数据');
+                    return this.generateSampleData();
+                }
+            }
+
+            /**
+             * 生成示例数据（开发用）
+             */
+            generateSampleData() {
+                return [
+                    {
+                        id: '2401.00001',
+                        title: 'Attention Is All You Need (Demo)',
+                        authors: ['Ashish Vaswani', 'Ilya Sutskever'],
+                        abstract: 'The dominant sequence transduction models are based on complex recurrent or convolutional neural networks...',
+                        date: '2024-01-15',
+                        category: 'cs.CL',
+                        conference: 'NeurIPS 2023',
+                        url: 'https://arxiv.org/abs/2401.00001',
+                        citations: 82000,
+                        views: 150000
+                    },
+                    {
+                        id: '2401.00002',
+                        title: 'BERT: Pre-training of Deep Bidirectional Transformers (Demo)',
+                        authors: ['Jacob Devlin', 'Ming-Wei Chang'],
+                        abstract: 'We introduce BERT, a new method of pre-training language representations...',
+                        date: '2024-01-10',
+                        category: 'cs.CL',
+                        conference: 'EMNLP 2022',
+                        url: 'https://arxiv.org/abs/2401.00002',
+                        citations: 65000,
+                        views: 120000
+                    }
+                ];
+            }
+
+            /**
+             * 初始化搜索引擎
+             */
+            initSearchEngine() {
+                this.searchEngine = new PaperSearchEngine(this.papers);
+            }
+
+            /**
+             * 增强论文数据（获取引用数等）
+             */
+            async enrichPapers() {
+                // 这里会从 Semantic Scholar 获取额外数据
+                // 为避免 API 限制，示例中只处理已有数据
+                
+                for (let paper of this.papers) {
+                    // 计算热度评分
+                    paper.trendingScore = this.searchEngine.calculateTrendingScore(paper);
+                    
+                    // 添加新鲜度标记
+                    paper.isNew = this.isNew(paper.date);
+                    paper.isUpdated = false; // 需要从 arXiv 获取更新信息
+                }
+
+                return this.papers;
+            }
+
+            /**
+             * 检查论文是否为新发布
+             */
+            isNew(dateStr) {
+                const publishDate = new Date(dateStr);
+                const now = new Date();
+                const daysDiff = Math.floor((now - publishDate) / (1000 * 60 * 60 * 24));
+                return daysDiff <= 1;
+            }
+
+            /**
+             * 设置事件监听
+             */
+            setupEventListeners() {
+                // 搜索输入
+                const searchInput = document.querySelector('#searchInput');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+                }
+
+                // 排序选择
+                const sortSelect = document.querySelector('#sortSelect');
+                if (sortSelect) {
+                    sortSelect.addEventListener('change', (e) => this.handleSort(e.target.value));
+                }
+
+                // 标签页切换
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => this.handleTabChange(e.target.dataset.tab));
+                });
+
+                // 主题切换
+                const themeToggle = document.querySelector('#themeToggle');
+                if (themeToggle) {
+                    themeToggle.addEventListener('click', () => this.toggleTheme());
+                }
+
+                // 刷新按钮
+                const refreshBtn = document.querySelector('#refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => this.refresh());
+                }
+            }
+
+            /**
+             * 处理搜索
+             */
+            handleSearch(query) {
+                console.log(`🔍 搜索: ${query}`);
+                
+                const results = query.trim()
+                    ? this.searchEngine.search(query)
+                    : this.papers;
+
+                this.render(results);
+            }
+
+            /**
+             * 处理排序
+             */
+            handleSort(sortType) {
+                console.log(`📊 排序方式: ${sortType}`);
+                
+                const sortedPapers = this.searchEngine.sort(this.papers, sortType, false);
+                this.render(sortedPapers);
+            }
+
+            /**
+             * 处理标签页切换
+             */
+            handleTabChange(tabName) {
+                console.log(`📑 切换标签: ${tabName}`);
+                
+                switch (tabName) {
+                    case 'saved':
+                        this.showSavedPapers();
+                        break;
+                    case 'stats':
+                        this.showStats();
+                        break;
+                    default:
+                        this.render(this.papers);
+                }
+            }
+
+            /**
+             * 切换主题
+             */
+            toggleTheme() {
+                const html = document.documentElement;
+                const isDark = html.getAttribute('data-theme') === 'dark';
+                html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            }
+
+            /**
+             * 刷新数据
+             */
+            async refresh() {
+                console.log('🔄 刷新数据中...');
+                await this.init();
+            }
+
+            /**
+             * 保存论文（收藏）
+             */
+            savePaper(paperId, title) {
+                if (this.bookmarks.exists(paperId)) {
+                    this.bookmarks.remove(paperId);
+                    console.log(`⭐ 已取消保存: ${title}`);
+                } else {
+                    this.bookmarks.add(paperId, { title });
+                    console.log(`⭐ 已保存: ${title}`);
+                }
+            }
+
+            /**
+             * 显示已保存的论文
+             */
+            showSavedPapers() {
+                const bookmarkIds = Object.keys(this.bookmarks.bookmarks);
+                const savedPapers = this.papers.filter(p => bookmarkIds.includes(p.id));
+                
+                console.log(`⭐ 已保存论文数: ${savedPapers.length}`);
+                this.render(savedPapers);
+            }
+
+            /**
+             * 显示统计信息
+             */
+            showStats() {
+                const stats = this.searchEngine.getStats();
+                const bookmarkStats = this.bookmarks.getStats();
+
+                console.log('📊 统计信息:');
+                console.log(`  总论文数: ${stats.total}`);
+                console.log(`  已保存数: ${bookmarkStats.total}`);
+                console.log(`  按分类:`, stats.byCategory);
+                console.log(`  顶级作者:`, stats.topAuthors);
+                console.log(`  按会议:`, stats.byConference);
+            }
+
+            /**
+             * 渲染论文列表
+             */
+            render(papers = this.papers) {
+                const container = document.querySelector('#papersContainer');
+                
+                if (!container) {
+                    console.warn('⚠️ 未找到论文容器元素 (#papersContainer)');
+                    return;
+                }
+
+                if (papers.length === 0) {
+                    container.innerHTML = '<p style="text-align:center; color:#999; padding:2rem;">未找到论文</p>';
+                    return;
+                }
+
+                container.innerHTML = papers.map(paper => `
+                    <div style="
+                        background: white;
+                        border: 1px solid #e0e0e0;
+                        border-radius: 8px;
+                        padding: 1.5rem;
+                        margin-bottom: 1rem;
+                        transition: all 0.3s;
+                    " onmouseover="this.style.boxShadow='0 8px 20px rgba(0,0,0,0.1)'" 
+                       onmouseout="this.style.boxShadow='none'">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                            <div>
+                                ${paper.isNew ? '<span style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; margin-right: 0.5rem;">NEW</span>' : ''}
+                                ${this.bookmarks.exists(paper.id) ? '<span style="background: #f43f5e; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem;">★ SAVED</span>' : ''}
+                            </div>
+                            <button onclick="myArxiv.savePaper('${paper.id}', '${paper.title.replace(/'/g, "\\'")}'); myArxiv.render();" 
+                                    style="background: ${this.bookmarks.exists(paper.id) ? '#f43f5e' : '#f0f0f0'}; color: ${this.bookmarks.exists(paper.id) ? 'white' : 'inherit'}; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer;">
+                                ${this.bookmarks.exists(paper.id) ? '★' : '☆'}
+                            </button>
+                        </div>
+
+                        <h3 style="margin: 0 0 0.75rem 0; font-size: 1.25rem; line-height: 1.4;">
+                            <a href="${paper.url}" target="_blank" style="color: #4f46e5; text-decoration: none;">
+                                ${paper.title}
+                            </a>
+                        </h3>
+
+                        <p style="color: #666; margin: 0 0 1rem 0; font-size: 0.9rem;">
+                            👥 ${paper.authors.slice(0, 3).join(', ')}${paper.authors.length > 3 ? ` +${paper.authors.length - 3}` : ''}
+                            <br/>
+                            📅 ${new Date(paper.date).toLocaleDateString('zh-CN')}
+                            ${paper.conference ? `| 🏆 ${paper.conference}` : ''}
+                            ${paper.citations ? `| 📖 ${paper.citations} citations` : ''}
+                        </p>
+
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; padding: 1rem 0; border-top: 1px solid #f0f0f0;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #4f46e5;">${paper.citations || 0}</div>
+                                <div style="font-size: 0.75rem; color: #999; text-transform: uppercase;">Citations</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #4f46e5;">${paper.views || 0}</div>
+                                <div style="font-size: 0.75rem; color: #999; text-transform: uppercase;">Views</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #4f46e5;">${(paper.trendingScore || 0).toFixed(2)}</div>
+                                <div style="font-size: 0.75rem; color: #999; text-transform: uppercase;">Trending</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            /**
+             * 导出收藏为 JSON
+             */
+            exportBookmarks() {
+                const json = this.bookmarks.exportJSON();
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `myarxiv-bookmarks-${new Date().getTime()}.json`;
+                a.click();
+                console.log('💾 已导出收藏');
+            }
+
+            /**
+             * 导出收藏为 BibTeX
+             */
+            exportBibTeX() {
+                const bibtex = this.bookmarks.exportBibTeX(this.papers);
+                const blob = new Blob([bibtex], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `myarxiv-citations-${new Date().getTime()}.bib`;
+                a.click();
+                console.log('📄 已导出 BibTeX');
+            }
+        }
+
+        // 初始化应用
+        const myArxiv = new MyArxivPro();
+
+        // 暴露到全局作用域（用于 HTML 内联事件）
+        window.myArxiv = myArxiv;
+    </script>
+
+    <!-- 最小化的 UI 容器 -->
+    <div style="max-width: 1200px; margin: 0 auto; padding: 2rem;">
+        <h1>MyArxiv Pro - 完整示例</h1>
+        <div id="papersContainer">
+            <p style="text-align: center; color: #999;">加载中...</p>
+        </div>
+    </div>
+</body>
+</html>

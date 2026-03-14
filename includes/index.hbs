@@ -1,836 +1,272 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>✨ MyArxiv - 个性化论文追踪</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary: #4f46e5;
-            --primary-dark: #4338ca;
-            --secondary: #06b6d4;
-            --accent: #f43f5e;
-            --text-dark: #0f172a;
-            --text-light: #64748b;
-            --bg-light: #f8fafc;
-            --bg-white: #ffffff;
-            --border: #e2e8f0;
-            --success: #10b981;
-            --warning: #f59e0b;
-        }
-
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, var(--bg-light) 0%, #f0f9ff 100%);
-            color: var(--text-dark);
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-
-        /* ========== Header ========== */
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, #6366f1 100%);
-            color: white;
-            padding: 2rem;
-            box-shadow: 0 4px 20px rgba(79, 70, 229, 0.15);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .header-container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .header-title {
-            font-size: 2rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .btn-icon {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            color: white;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            font-size: 1.2rem;
-        }
-
-        .btn-icon:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.05);
-        }
-
-        /* ========== Search & Filter ========== */
-        .search-section {
-            display: grid;
-            grid-template-columns: 1fr 250px;
-            gap: 1rem;
-            align-items: end;
-        }
-
-        .search-container {
-            position: relative;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 0.75rem 1rem 0.75rem 2.5rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.95);
-            font-size: 0.95rem;
-            color: var(--text-dark);
-            transition: all 0.3s;
-        }
-
-        .search-input::placeholder {
-            color: #94a3b8;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: var(--secondary);
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #cbd5e1;
-            font-size: 1.1rem;
-        }
-
-        .sort-select {
-            padding: 0.75rem 1rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--text-dark);
-            cursor: pointer;
-            font-size: 0.95rem;
-            transition: all 0.3s;
-        }
-
-        .sort-select:hover,
-        .sort-select:focus {
-            border-color: var(--secondary);
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
-        }
-
-        /* ========== Main Content ========== */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem 2rem;
-        }
-
-        /* ========== Tabs ========== */
-        .tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 2rem;
-            border-bottom: 2px solid var(--border);
-            overflow-x: auto;
-        }
-
-        .tab {
-            padding: 0.75rem 1.5rem;
-            background: none;
-            border: none;
-            color: var(--text-light);
-            font-size: 1rem;
-            cursor: pointer;
-            position: relative;
-            white-space: nowrap;
-            transition: color 0.3s;
-        }
-
-        .tab:hover {
-            color: var(--primary);
-        }
-
-        .tab.active {
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--primary);
-        }
-
-        /* ========== Paper List ========== */
-        .papers-container {
-            display: grid;
-            gap: 1.5rem;
-        }
-
-        .paper-card {
-            background: var(--bg-white);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: all 0.3s;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .paper-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .paper-card:hover {
-            box-shadow: 0 10px 30px rgba(79, 70, 229, 0.1);
-            border-color: var(--primary);
-        }
-
-        .paper-card:hover::before {
-            opacity: 1;
-        }
-
-        .paper-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 1rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .paper-badges {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .badge-new {
-            background: rgba(16, 185, 129, 0.15);
-            color: #059669;
-        }
-
-        .badge-updated {
-            background: rgba(245, 158, 11, 0.15);
-            color: #b45309;
-        }
-
-        .badge-star {
-            background: rgba(244, 63, 94, 0.15);
-            color: #be123c;
-        }
-
-        .paper-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .action-btn {
-            width: 32px;
-            height: 32px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--bg-light);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            font-size: 1rem;
-        }
-
-        .action-btn:hover {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        .action-btn.saved {
-            background: var(--accent);
-            color: white;
-            border-color: var(--accent);
-        }
-
-        .paper-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            color: var(--text-dark);
-            line-height: 1.4;
-        }
-
-        .paper-title:hover {
-            color: var(--primary);
-        }
-
-        .paper-meta {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-            font-size: 0.9rem;
-            color: var(--text-light);
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .paper-authors {
-            margin-bottom: 1rem;
-        }
-
-        .author {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            margin-right: 0.25rem;
-            background: rgba(79, 70, 229, 0.08);
-            border-radius: 4px;
-            font-size: 0.85rem;
-            color: var(--primary);
-        }
-
-        .author.highlight {
-            background: rgba(244, 63, 94, 0.15);
-            color: var(--accent);
-            font-weight: 600;
-        }
-
-        .paper-abstract {
-            display: none;
-            padding: 1rem;
-            background: var(--bg-light);
-            border-radius: 8px;
-            border-left: 4px solid var(--secondary);
-            font-size: 0.95rem;
-            line-height: 1.6;
-            color: var(--text-dark);
-            margin-top: 1rem;
-        }
-
-        .paper-abstract.expanded {
-            display: block;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 1rem;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-        }
-
-        .stat {
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 0.25rem;
-        }
-
-        /* ========== Sidebar (Saved Papers) ========== */
-        .sidebar {
-            background: var(--bg-white);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            position: sticky;
-            top: 120px;
-            max-height: 600px;
-            overflow-y: auto;
-        }
-
-        .sidebar-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .saved-item {
-            padding: 0.75rem;
-            background: var(--bg-light);
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-        }
-
-        .saved-item:hover {
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-        }
-
-        /* ========== Footer ========== */
-        .footer {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-light);
-            border-top: 1px solid var(--border);
-            margin-top: 4rem;
-        }
-
-        /* ========== Responsive ========== */
-        @media (max-width: 1024px) {
-            .container {
-                display: grid;
-                grid-template-columns: 1fr;
-            }
-
-            .sidebar {
-                position: relative;
-                top: 0;
-                max-height: none;
-                order: -1;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .header-title {
-                font-size: 1.5rem;
-            }
-
-            .search-section {
-                grid-template-columns: 1fr;
-            }
-
-            .paper-header {
-                flex-direction: column;
-            }
-
-            .paper-title {
-                font-size: 1.1rem;
-            }
-
-            .stats {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-
-        /* ========== Loading & Empty States ========== */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: var(--text-light);
-        }
-
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-
-        .empty-state-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            color: var(--text-dark);
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* ========== Highlights ========== */
-        .highlight-keyword {
-            background: rgba(244, 63, 94, 0.2);
-            color: var(--accent);
-            font-weight: 600;
-            padding: 0 0.25rem;
-            border-radius: 2px;
-        }
-
-        .highlight-conference {
-            background: rgba(79, 70, 229, 0.15);
-            color: var(--primary);
-            font-weight: 600;
-            padding: 0 0.25rem;
-            border-radius: 2px;
-        }
-    </style>
-</head>
-<body>
-    <!-- Header -->
-    <div class="header">
-        <div class="header-container">
-            <div class="header-top">
-                <div class="header-title">✨ MyArxiv Pro</div>
-                <div class="header-actions">
-                    <button class="btn-icon" id="themeToggle" title="切换主题">🌙</button>
-                    <button class="btn-icon" id="refreshBtn" title="刷新">🔄</button>
-                    <button class="btn-icon" id="settingsBtn" title="设置">⚙️</button>
-                </div>
-            </div>
-
-            <!-- Search & Filter -->
-            <div class="search-section">
-                <div class="search-container">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" class="search-input" id="searchInput" 
-                           placeholder="搜索论文标题、作者、关键词...">
-                </div>
-                <select class="sort-select" id="sortSelect">
-                    <option value="date">最新发布</option>
-                    <option value="citations">高被引用</option>
-                    <option value="relevance">相关性</option>
-                    <option value="views">热度</option>
-                </select>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="container">
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab active" data-tab="all">📚 全部论文</button>
-            <button class="tab" data-tab="saved">⭐ 我的收藏</button>
-            <button class="tab" data-tab="stats">📊 统计</button>
-        </div>
-
-        <!-- All Papers Tab -->
-        <div id="all-tab" class="tab-content active">
-            <div class="papers-container" id="papersContainer">
-                <!-- Papers will be loaded here -->
-            </div>
-        </div>
-
-        <!-- Saved Papers Tab -->
-        <div id="saved-tab" class="tab-content">
-            <div class="papers-container" id="savedPapersContainer">
-                <!-- Saved papers will be shown here -->
-            </div>
-        </div>
-
-        <!-- Stats Tab -->
-        <div id="stats-tab" class="tab-content">
-            <div id="statsContainer">
-                <!-- Statistics will be shown here -->
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-        <p>最后更新: <span id="lastUpdate">-</span> | 
-           总论文数: <span id="totalPapers">-</span> | 
-           <a href="https://github.com/Wastoon/3DArxiv" target="_blank" style="color: var(--primary); text-decoration: none;">GitHub</a>
-        </p>
-    </div>
-
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    <title>{{site_title}}</title>
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="robots" content="noindex, nofollow"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico"/>
+    <link href="index.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.css"
+          integrity="sha384-R4558gYOUz8mP9YWpZJjofhk+zx0AS11p36HnD2ZKj/6JR5z27gSSULCNHIRReVs" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"
+            integrity="sha384-z1fJDqw8ZApjGO3/unPWUPsIymfsJmyrDVWC8Tv/a1HeOtGmkwNd/7xUS0Xcnvsx" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/contrib/auto-render.min.js"
+            integrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script>
-        // ============ Data Management ============
-        let allPapers = [];
-        let savedPapers = JSON.parse(localStorage.getItem('savedPapers') || '{}');
-        let fuseIndex = null;
-
-        // Load papers from cache.json
-        async function loadPapers() {
-            try {
-                const response = await fetch('./cache.json');
-                const data = await response.json();
-                allPapers = data.papers || [];
-                
-                // Initialize Fuse.js for searching
-                fuseIndex = new Fuse(allPapers, {
-                    keys: ['title', 'authors', 'abstract', 'category'],
-                    threshold: 0.3
-                });
-
-                document.getElementById('totalPapers').textContent = allPapers.length;
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN');
-                
-                renderPapers(allPapers);
-            } catch (error) {
-                console.error('Failed to load papers:', error);
-            }
-        }
-
-        // ============ Search & Sort ============
-        document.getElementById('searchInput').addEventListener('input', (e) => {
-            const query = e.target.value.trim();
-            if (query) {
-                const results = fuseIndex.search(query);
-                renderPapers(results.map(r => r.item));
-            } else {
-                const sortValue = document.getElementById('sortSelect').value;
-                renderPapers(sortPapers(allPapers, sortValue));
-            }
-        });
-
-        document.getElementById('sortSelect').addEventListener('change', (e) => {
-            const searchQuery = document.getElementById('searchInput').value.trim();
-            let papers = searchQuery 
-                ? fuseIndex.search(searchQuery).map(r => r.item)
-                : allPapers;
-            renderPapers(sortPapers(papers, e.target.value));
-        });
-
-        function sortPapers(papers, sortType) {
-            const sorted = [...papers];
-            switch(sortType) {
-                case 'citations':
-                    return sorted.sort((a, b) => (b.citations || 0) - (a.citations || 0));
-                case 'relevance':
-                    return sorted.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-                case 'views':
-                    return sorted.sort((a, b) => (b.views || 0) - (a.views || 0));
-                case 'date':
-                default:
-                    return sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
-            }
-        }
-
-        // ============ Rendering ============
-        function renderPapers(papers) {
-            const container = document.getElementById('papersContainer');
-            
-            if (papers.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🔍</div>
-                        <div class="empty-state-title">未找到论文</div>
-                        <p>尝试修改搜索条件</p>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = papers.map(paper => `
-                <div class="paper-card" id="paper-${paper.id}">
-                    <div class="paper-header">
-                        <div class="paper-badges">
-                            ${paper.isNew ? '<span class="badge badge-new">New</span>' : ''}
-                            ${paper.isUpdated ? '<span class="badge badge-updated">Updated</span>' : ''}
-                            ${savedPapers[paper.id] ? '<span class="badge badge-star">★</span>' : ''}
-                        </div>
-                        <div class="paper-actions">
-                            <button class="action-btn ${savedPapers[paper.id] ? 'saved' : ''}" 
-                                    onclick="toggleSave('${paper.id}', '${paper.title}')" title="保存论文">
-                                ${savedPapers[paper.id] ? '★' : '☆'}
-                            </button>
-                            <a href="${paper.url}" target="_blank" class="action-btn" title="打开论文">↗</a>
-                        </div>
-                    </div>
-
-                    <h3 class="paper-title">${paper.title}</h3>
-
-                    <div class="paper-meta">
-                        <span class="meta-item">📅 ${new Date(paper.date).toLocaleDateString('zh-CN')}</span>
-                        <span class="meta-item">👥 ${paper.authors.length} 作者</span>
-                        ${paper.citations ? `<span class="meta-item">📖 ${paper.citations} 引用</span>` : ''}
-                        ${paper.conference ? `<span class="meta-item">🏆 ${paper.conference}</span>` : ''}
-                    </div>
-
-                    <div class="paper-authors">
-                        ${paper.authors.slice(0, 3).map(a => `
-                            <span class="author">${a}</span>
-                        `).join('')}
-                        ${paper.authors.length > 3 ? `<span class="author">+${paper.authors.length - 3}</span>` : ''}
-                    </div>
-
-                    <div class="paper-abstract" id="abstract-${paper.id}">
-                        ${paper.abstract || 'No abstract available'}
-                    </div>
-
-                    <div class="stats">
-                        <div class="stat">
-                            <div class="stat-value">${paper.citations || 0}</div>
-                            <div class="stat-label">引用</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-value">${paper.views || 0}</div>
-                            <div class="stat-label">浏览</div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-value">${(paper.relevance || 0).toFixed(2)}</div>
-                            <div class="stat-label">相关性</div>
-                        </div>
-                    </div>
-
-                    <button onclick="toggleAbstract('${paper.id}')" style="
-                        width: 100%; margin-top: 1rem; padding: 0.5rem; 
-                        background: var(--bg-light); border: 1px solid var(--border); 
-                        border-radius: 6px; cursor: pointer; color: var(--primary); 
-                        font-weight: 600; transition: all 0.2s;">
-                        📖 查看摘要
-                    </button>
-                </div>
-            `).join('');
-        }
-
-        function toggleAbstract(paperId) {
-            const abstract = document.getElementById(`abstract-${paperId}`);
-            abstract.classList.toggle('expanded');
-        }
-
-        // ============ Save/Bookmark ============
-        function toggleSave(paperId, title) {
-            if (savedPapers[paperId]) {
-                delete savedPapers[paperId];
-            } else {
-                savedPapers[paperId] = {
-                    title: title,
-                    savedAt: new Date().toISOString(),
-                    tags: [],
-                    notes: ''
-                };
-            }
-            localStorage.setItem('savedPapers', JSON.stringify(savedPapers));
-            renderPapers(allPapers);
-            
-            // Visual feedback
-            const btn = event.target;
-            btn.classList.toggle('saved');
-            btn.textContent = btn.classList.contains('saved') ? '★' : '☆';
-        }
-
-        // ============ Tabs ============
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                
-                e.target.classList.add('active');
-                const tabName = e.target.dataset.tab;
-                document.getElementById(`${tabName}-tab`).classList.add('active');
-
-                if (tabName === 'saved') renderSavedPapers();
-                if (tabName === 'stats') renderStats();
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
+                    {left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true},
+                    {left:"\\begin{equation}",right:"\\end{equation}",display:true},
+                    {left:"\\begin{align}",right:"\\end{align}",display:true},
+                ],
+                throwOnError: false
             });
         });
-
-        function renderSavedPapers() {
-            const saved = Object.entries(savedPapers).map(([id, data]) => {
-                const paper = allPapers.find(p => p.id === id);
-                return paper;
-            }).filter(Boolean);
-
-            const container = document.getElementById('savedPapersContainer');
-            if (saved.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⭐</div>
-                        <div class="empty-state-title">还没有保存任何论文</div>
-                    </div>
-                `;
-            } else {
-                renderPapers(saved);
-            }
-        }
-
-        function renderStats() {
-            const categories = {};
-            allPapers.forEach(p => {
-                categories[p.category] = (categories[p.category] || 0) + 1;
-            });
-
-            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">';
-            
-            Object.entries(categories).forEach(([cat, count]) => {
-                html += `
-                    <div style="background: var(--bg-white); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem;">
-                        <div style="font-size: 2rem; font-weight: 700; color: var(--primary);">${count}</div>
-                        <div style="color: var(--text-light); margin-top: 0.5rem;">${cat}</div>
-                    </div>
-                `;
-            });
-            
-            html += '</div>';
-            document.getElementById('statsContainer').innerHTML = html;
-        }
-
-        // ============ UI Controls ============
-        document.getElementById('themeToggle').addEventListener('click', function() {
-            document.body.style.filter = document.body.style.filter === 'invert(1)' ? 'none' : 'invert(1)';
-        });
-
-        document.getElementById('refreshBtn').addEventListener('click', loadPapers);
-
-        // ============ Init ============
-        loadPapers();
     </script>
+</head>
+
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<header class="header-container">
+    <div class="header-inner">
+        <a class="header-logo" href="https://github.com/Wastoon/3DArxiv" title="GitHub">
+            <span class="logo-3d">3D</span><span class="logo-arxiv">Arxiv</span>
+        </a>
+
+        <div class="header-search">
+            <div class="search-wrap">
+                <i class="ri-search-line search-icon"></i>
+                <input type="text" id="search-input" placeholder="搜索标题、作者、摘要… (Press / )" autocomplete="off" spellcheck="false"/>
+                <kbd class="search-shortcut">/</kbd>
+                <div id="search-history-dropdown" class="search-history-dropdown hidden"></div>
+            </div>
+            <button id="featured-toggle" title="只看精选 (顶级作者 / 顶会)">
+                <i class="ri-award-line"></i><span>精选</span>
+            </button>
+        </div>
+
+        <div class="header-actions">
+            <button id="nav-btn" class="hbtn" title="领域导航">
+                <i class="ri-map-2-line"></i>
+            </button>
+            <button id="stats-btn" class="hbtn" title="统计图表">
+                <i class="ri-bar-chart-2-line"></i>
+            </button>
+            <button id="bookmarks-btn" class="hbtn" title="我的收藏">
+                <i class="ri-bookmark-line"></i>
+                <span id="bookmark-count" class="badge hidden">0</span>
+            </button>
+            <label class="hbtn theme-switch" for="checkbox" title="切换主题">
+                <input type="checkbox" id="checkbox"/>
+                <i id="theme-icon" class="ri-moon-line"></i>
+            </label>
+            <a class="hbtn" href="https://github.com/Wastoon/3DArxiv" target="_blank" rel="noopener" title="GitHub">
+                <i class="ri-github-line"></i>
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- Featured Legend -->
+<div id="featured-legend" class="featured-legend hidden">
+    <div class="fl-items">
+        <div class="fl-item"><span class="hl-star">★★</span> 顶级作者 + 顶级机构</div>
+        <div class="fl-item"><span class="hl-star">★</span> 顶级作者 或 顶级机构</div>
+        <div class="fl-item"><span class="chip">Conference</span> 已在顶会发表</div>
+    </div>
+    <button class="fl-close" id="legend-close">&times;</button>
+</div>
+
+<!-- ═══════ STATS DASHBOARD (hidden by default) ═══════ -->
+<section id="stats-dashboard" class="stats-dashboard hidden">
+    <div class="stats-dashboard-inner">
+        <div class="sd-header">
+            <h2 class="sd-title"><i class="ri-bar-chart-2-line"></i> 论文统计</h2>
+            <button class="sd-close" id="stats-close"><i class="ri-close-line"></i></button>
+        </div>
+        <div class="sd-kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-total">—</div>
+                <div class="kpi-label">论文总数</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-days">—</div>
+                <div class="kpi-label">统计天数</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-avg">—</div>
+                <div class="kpi-label">日均论文</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-val" id="kpi-top">—</div>
+                <div class="kpi-label">顶会/大牛论文</div>
+            </div>
+        </div>
+        <div class="sd-charts">
+            <div class="chart-card chart-card--wide">
+                <div class="chart-card-title">每日论文数量趋势</div>
+                <div class="chart-wrap"><canvas id="chart-daily"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">各领域论文分布</div>
+                <div class="chart-wrap"><canvas id="chart-subjects"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-card-title">顶会论文 vs 普通论文</div>
+                <div class="chart-wrap chart-wrap--donut"><canvas id="chart-featured"></canvas></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════ SUMMARY BAR ═══════ -->
+<div class="summary-bar">
+    <div class="summary-bar-inner">
+        <span id="sb-total" class="sb-stat">— 篇</span>
+        <span class="sb-sep">·</span>
+        <span id="sb-days" class="sb-stat">— 天</span>
+        <span class="sb-sep">·</span>
+        <span id="sb-top" class="sb-stat sb-highlight">— 篇精选</span>
+        <span class="sb-sep">·</span>
+        <span id="sb-read" class="sb-stat sb-read">已读 — 篇</span>
+        <span class="sb-right">
+            <kbd class="kb">Tab</kbd> 展开/折叠全部
+            &nbsp;&nbsp;
+            <kbd class="kb">/</kbd> 搜索
+        </span>
+    </div>
+</div>
+
+<!-- ═══════ MAIN ═══════ -->
+<main class="main-content">
+
+{{#each days}}
+<section class="day-section">
+    <div class="day-header">
+        <span class="day-date"><time datetime="{{datetime}}">{{time_format datetime "%m月%d日"}}</time></span>
+        <span class="day-weekday" data-datetime="{{datetime}}"></span>
+        <div class="day-divider"></div>
+        <span class="day-year" data-datetime="{{datetime}}"></span>
+    </div>
+
+    {{#each subjects}}
+    <div class="subject-block" id="subj-{{subject}}">
+        <details>
+            <summary class="subject-summary">
+                <svg class="chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 4.293a1 1 0 011.414 0L14.414 10l-5.707 5.707a1 1 0 01-1.414-1.414L11.586 10 7.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                <span class="subject-name">{{ subject }}</span>
+                <span class="subject-pill">{{len papers}}</span>
+            </summary>
+            <div class="subject-body">
+                {{#each papers}}
+                <div class="paper-item"
+                     data-title="{{title}}"
+                     data-authors="{{authors}}"
+                     data-comment="{{comment}}"
+                     data-id="{{id}}"
+                     data-conference="{{#if comment}}1{{else}}0{{/if}}">
+                    <details>
+                        <summary class="paper-summary">
+                            <span class="paper-title-wrap">
+                                {{#if (ne updated published)}}<span class="updated-badge" title="已更新">♻ </span>{{/if}}{{highlight_title title authors comment}}{{#if comment}}&nbsp;{{highlight_conference comment}}{{/if}}
+                            </span>
+                            <svg class="paper-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 4.293a1 1 0 011.414 0L14.414 10l-5.707 5.707a1 1 0 01-1.414-1.414L11.586 10 7.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                        </summary>
+                        <div class="paper-body">
+                            <div class="paper-actions">
+                                <a class="paction paction--link" href="{{id}}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                                    <i class="ri-links-line"></i> arXiv
+                                </a>
+                                <a class="paction paction--pdf" href="{{pdf_url}}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                                    <i class="ri-file-pdf-2-line"></i> PDF
+                                </a>
+                                <button class="paction paction--ai ai-summary-btn"
+                                        data-title="{{title}}">
+                                    <i class="ri-sparkling-2-line"></i> AI 中文摘要
+                                </button>
+                                <button class="paction paction--read read-btn"
+                                        data-id="{{id}}"
+                                        title="标记为已读">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                <button class="paction paction--bm bookmark-btn"
+                                        data-id="{{id}}"
+                                        data-url="{{id}}"
+                                        title="收藏此论文">
+                                    <i class="ri-bookmark-line"></i>
+                                </button>
+                            </div>
+                            <div class="paper-authors">{{highlight_author authors}}</div>
+                            <div class="paper-abstract">{{summary}}</div>
+                            {{#if comment}}
+                            <div class="paper-comment"><span class="chip chip--sm">comment</span> {{comment}}</div>
+                            {{/if}}
+                        </div>
+                    </details>
+                </div>
+                {{/each}}
+            </div>
+        </details>
+    </div>
+    {{/each}}
+</section>
+{{/each}}
+
+</main>
+
+<!-- ═══════ BOOKMARKS PANEL ═══════ -->
+<div id="panel-overlay" class="panel-overlay"></div>
+<aside id="bookmarks-panel" class="bookmarks-panel">
+    <div class="bp-header">
+        <span class="bp-title"><i class="ri-bookmark-fill"></i> 收藏夹</span>
+        <button class="bp-close" id="bp-close"><i class="ri-close-line"></i></button>
+    </div>
+    <div class="bp-body" id="bp-body">
+        <div class="bp-empty">
+            <i class="ri-bookmark-line" style="font-size:2.8rem"></i><br>
+            暂无收藏
+        </div>
+    </div>
+    <div class="bp-footer">
+        <button id="bp-export" class="bp-export-btn"><i class="ri-download-line"></i> 导出为文本</button>
+    </div>
+</aside>
+
+<!-- ═══════ NAV PANEL ═══════ -->
+<aside id="nav-panel" class="nav-panel hidden">
+    <div class="nav-panel-hd">
+        <span><i class="ri-map-2-line"></i> 领域导航</span>
+        <button id="nav-close"><i class="ri-close-line"></i></button>
+    </div>
+    <div id="nav-panel-body" class="nav-panel-body"></div>
+    <div class="nav-panel-ft">
+        <span id="nav-dedupe-info" class="nav-dedupe-info"></span>
+    </div>
+</aside>
+
+<!-- ═══════ FOOTER ═══════ -->
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <span class="footer-brand">3DArxiv</span>
+        <span class="footer-sep">·</span>
+        <span class="footer-powered">Powered by <a href="https://github.com/MLNLP-World/MyArxiv" target="_blank">MyArxiv</a></span>
+        <span class="footer-right">
+            <time id="build-timestamp" datetime="{{build_time}}">
+                <a href="https://github.com/Wastoon/3DArxiv/actions" target="_blank" style="color:inherit">
+                    更新于 {{time_format build_time "%F %T"}} UTC
+                </a>
+            </time>
+        </span>
+    </div>
+</footer>
+
+<script src="index.js"></script>
 </body>
 </html>
