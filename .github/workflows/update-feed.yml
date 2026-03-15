@@ -79,7 +79,7 @@ jobs:
       # 只在每日定时触发时推送，手动/push 触发时跳过
       # 若需要每次都推送，删除下方 if 行即可
       - name: Notify Telegram
-        #if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
