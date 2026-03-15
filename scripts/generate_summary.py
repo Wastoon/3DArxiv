@@ -71,7 +71,7 @@ def collect_papers(cache: dict) -> list:
 def call_gemini(title: str, abstract: str) -> str:
     """调用 Gemini 生成一句话中文 TL;DR，失败返回空字符串"""
     prompt = (
-        f"请用**一句话中文**总结以下学术论文的核心贡献（不超过50字，直接输出结论，不要有任何前缀如"本文"、"该论文"等）：\n\n"
+        "请用一句话中文总结以下学术论文的核心贡献（不超过50字，直接输出结论，不加任何前缀）：\n\n"
         f"标题：{title}\n\n"
         f"摘要：{abstract[:800]}"
     )
