@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ii<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8"/>
@@ -475,15 +475,22 @@ function isStar(n) {
 
 // ── Graph init ──────────────────────────────────────────
 function initGraph() {
-  const R = Math.min(W,H) * 0.35;
+  // 初始半径：保证节点间有足够间距才能展开
+  // 每个节点平均需要约 (IDEAL*1.5)^2 的面积，换算成圆形布局半径
+  const INIT_IDEAL = Math.max(80, Math.sqrt(allNodes.length) * 8);
+  const R = Math.max(
+    Math.sqrt(allNodes.length) * INIT_IDEAL * 0.55,
+    Math.min(W, H) * 0.4
+  );
   nodes = allNodes.map((n, i) => {
     const angle  = (i / allNodes.length) * Math.PI * 2;
-    const jitter = (Math.random()-0.5) * R * 0.4;
+    const jitter = (Math.random() - 0.5) * R * 0.3;
     return {
       ...n,
       x: Math.cos(angle) * (R + jitter),
       y: Math.sin(angle) * (R + jitter),
-      vx: 0, vy: 0,
+      vx: (Math.random()-0.5) * 2,  // 微小初速，打破对称性
+      vy: (Math.random()-0.5) * 2,
       radius: nodeRadius(n),
       color:  nodeColor(n),
     };
@@ -523,64 +530,91 @@ function nodeColor(n) {
 function runForce() {
   simRunning = true;
   simTick = 0;
-  const nodeMap = new Map(nodes.map(n=>[n.id,n]));
-  const IDEAL = 60; // ideal edge length
+
+  // 参数随节点数自动调整
+  const N       = nodes.length;
+  const IDEAL   = Math.max(80, Math.sqrt(N) * 8);  // 理想边长：节点越多间距越大
+  const REPULSE = N * 120;                           // 斥力：线性正比于节点数
+  const GRAVITY = 0.003;                             // 中心弱引力：只防飘散
 
   function tick() {
     if (!simRunning || simTick++ > MAX_TICKS) {
       simRunning = false;
-      setProgress(100,'图谱就绪');
-      setTimeout(()=>{
-        document.getElementById('loading').style.display='none';
+      setProgress(100, '图谱就绪');
+      setTimeout(() => {
+        document.getElementById('loading').style.display = 'none';
         centerCamera();
       }, 300);
       return;
     }
 
-    const alpha = Math.max(0.01, 1 - simTick / MAX_TICKS);
+    const alpha = Math.max(0.02, 1 - simTick / MAX_TICKS);
 
-    // Repulsion (Barnes-Hut approximated by grid)
-    for (let i=0;i<nodes.length;i++) {
-      const a = nodes[i];
-      for (let j=i+1;j<nodes.length;j++) {
-        const b = nodes[j];
-        const dx = b.x-a.x, dy = b.y-a.y;
-        const d2 = dx*dx+dy*dy+1;
-        const d  = Math.sqrt(d2);
-        const f  = -800 / d2;
-        const fx = f*dx/d, fy = f*dy/d;
-        a.vx += fx; a.vy += fy;
-        b.vx -= fx; b.vy -= fy;
+    // ── 斥力：网格加速，只计算邻近格子 ──
+    const CELL = IDEAL * 2;
+    const grid = new Map();
+    nodes.forEach(n => {
+      const cx = Math.floor(n.x / CELL);
+      const cy = Math.floor(n.y / CELL);
+      const key = cx + ',' + cy;
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(n);
+    });
+    nodes.forEach(a => {
+      const cx = Math.floor(a.x / CELL);
+      const cy = Math.floor(a.y / CELL);
+      for (let ddx = -2; ddx <= 2; ddx++) {
+        for (let ddy = -2; ddy <= 2; ddy++) {
+          const neighbors = grid.get((cx+ddx)+','+(cy+ddy));
+          if (!neighbors) continue;
+          neighbors.forEach(b => {
+            if (b === a) return;
+            const rx = a.x - b.x, ry = a.y - b.y;
+            const d2 = rx*rx + ry*ry + 1;
+            const d  = Math.sqrt(d2);
+            const f  = REPULSE / d2;
+            a.vx += f * rx / d;
+            a.vy += f * ry / d;
+          });
+        }
       }
-    }
+    });
 
-    // Attraction (edges)
+    // ── 引力（边，只拉近不反推）──
     edges.forEach(e => {
       if (!e.sourceNode || !e.targetNode) return;
       if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return;
-      const a=e.sourceNode, b=e.targetNode;
-      const dx=b.x-a.x, dy=b.y-a.y;
-      const d=Math.sqrt(dx*dx+dy*dy)+.01;
-      const f=(d-IDEAL)*0.04 * alpha;
-      const fx=f*dx/d, fy=f*dy/d;
-      a.vx+=fx; a.vy+=fy;
-      b.vx-=fx; b.vy-=fy;
+      const a = e.sourceNode, b = e.targetNode;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d  = Math.sqrt(dx*dx + dy*dy) + 0.01;
+      if (d > IDEAL) {
+        const f  = (d - IDEAL) * 0.03 * alpha;
+        const fx = f * dx / d, fy = f * dy / d;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      }
     });
 
-    // Center gravity
+    // ── 中心弱引力 ──
     nodes.forEach(n => {
-      n.vx -= n.x * 0.01 * alpha;
-      n.vy -= n.y * 0.01 * alpha;
+      n.vx -= n.x * GRAVITY * alpha;
+      n.vy -= n.y * GRAVITY * alpha;
     });
 
-    // Integrate
+    // ── 积分 + 限速 + 阻尼 ──
+    const maxV = IDEAL * 0.5;
     nodes.forEach(n => {
-      n.vx *= 0.75;
-      n.vy *= 0.75;
-      n.x  += n.vx;
-      n.y  += n.vy;
+      n.vx *= 0.7;
+      n.vy *= 0.7;
+      const spd = Math.sqrt(n.vx*n.vx + n.vy*n.vy);
+      if (spd > maxV) { n.vx = n.vx/spd*maxV; n.vy = n.vy/spd*maxV; }
+      n.x += n.vx;
+      n.y += n.vy;
     });
 
+    if (simTick % 10 === 0) {
+      setProgress(80 + (simTick / MAX_TICKS) * 18, `布局中… ${simTick}/${MAX_TICKS}`);
+    }
     draw();
     requestAnimationFrame(tick);
   }
