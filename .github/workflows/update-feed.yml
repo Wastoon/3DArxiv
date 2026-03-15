@@ -1,24 +1,23 @@
 name: Update
-
 on:
   workflow_dispatch:
   push:
     branches:
       - main
   schedule:
-    # Adjust refresh schedule here. By default, it runs once per day.
-    # Syntax reference: https://docs.github.com/en/actions/reference/events-that-trigger-workflows#schedule
-    # Recommended tool: https://crontab.guru/
     - cron: "0 0 * * *"
+
 permissions:
   contents: write
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
+      # ── 1. Checkout ──────────────────────────────────
       - uses: actions/checkout@v2
+
+      # ── 2. Cache & Download ArxivFeed binary ─────────
       - name: Cache ArxivFeed
         id: cache-arxivfeed
         uses: actions/cache@v3
@@ -49,8 +48,26 @@ jobs:
               "$(cat asset.url)"
           tar -zxvf arxivfeed.tgz --strip-components 1 $(tar tf arxivfeed.tgz | grep /arxivfeed)
           chmod +x arxivfeed
+
+      # ── 3. Build HTML + cache.json ───────────────────
       - name: Build rss
         run: ./arxivfeed
+
+      # ── 4. Set up Python ─────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      # ── 5. Generate RSS Feed ──────────────────────────
+      - name: Generate RSS Feed
+        run: python scripts/generate_rss.py
+
+      # ── 6. Generate Graph Data (for 3D knowledge graph) ──
+      - name: Generate Graph Data
+        run: python scripts/generate_graph.py
+
+      # ── 7. Deploy everything to GitHub Pages ─────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
