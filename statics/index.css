@@ -690,3 +690,92 @@ details[open] { display: block; }
 }
 .bm-note-input:focus { border-color: var(--c-accent); }
 .bm-note-input::placeholder { color: var(--c-text3); }
+
+/* ═══════════════════════════════════════════
+   Sub-topic Tag Bar
+═══════════════════════════════════════════ */
+.tag-bar {
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+}
+.tag-bar-inner {
+  max-width: 1160px; margin: 0 auto;
+  padding: 8px 20px;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.tag-bar-label {
+  font-size: .72rem; font-weight: 600; color: var(--c-text3);
+  text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap; flex-shrink: 0;
+}
+.tag-list {
+  display: flex; align-items: center;
+  flex-wrap: wrap; gap: 5px;
+}
+.tag-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 24px; padding: 0 10px;
+  border: 1.5px solid var(--c-border);
+  border-radius: 20px;
+  background: var(--c-surface2); color: var(--c-text2);
+  font-size: .72rem; font-weight: 500;
+  cursor: pointer; transition: all var(--t);
+  white-space: nowrap;
+}
+.tag-chip:hover {
+  border-color: var(--c-accent); color: var(--c-accent);
+  background: var(--c-accent-bg);
+}
+.tag-chip.active {
+  border-color: var(--c-accent); color: var(--c-accent);
+  background: var(--c-accent-bg);
+  font-weight: 600;
+}
+.tag-chip--all.active {
+  border-color: var(--c-text2); color: var(--c-text);
+  background: var(--c-surface2);
+}
+.tag-count {
+  font-size: .68rem; color: inherit; opacity: .7;
+}
+
+/* ═══════════════════════════════════════════
+   BibTeX Button
+═══════════════════════════════════════════ */
+.paction--bib {
+  font-family: var(--font-mono);
+}
+.paction--bib:hover {
+  border-color: var(--c-green); color: var(--c-green);
+  background: rgba(22,163,74,.08);
+}
+.paction--bib.copied {
+  border-color: var(--c-green); color: var(--c-green);
+  background: rgba(22,163,74,.1);
+}
+[data-theme="dark"] .paction--bib.copied {
+  background: rgba(74,222,128,.08);
+}
+
+/* ═══════════════════════════════════════════
+   Permalink Button
+═══════════════════════════════════════════ */
+.paction--permalink:hover {
+  border-color: var(--c-accent); color: var(--c-accent);
+  background: var(--c-accent-bg);
+}
+.paction--permalink.copied {
+  border-color: var(--c-accent); color: var(--c-accent);
+  background: var(--c-accent-bg);
+}
+
+/* Flash highlight when deep-linking to a paper */
+@keyframes permalinkFlash {
+  0%   { box-shadow: 0 0 0 3px var(--c-accent), 0 0 16px var(--c-accent-bg); background: var(--c-accent-bg); }
+  100% { box-shadow: none; background: transparent; }
+}
+.permalink-flash {
+  animation: permalinkFlash 1.2s ease-out;
+  border-radius: var(--r-md);
+}
