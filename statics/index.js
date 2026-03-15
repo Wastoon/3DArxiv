@@ -607,17 +607,20 @@ loadSummaries();
 // ═══════════════════════════════════════════
 
 const TAG_RULES = [
-  { tag: 'VLA',         keywords: ['vision-language-action','vla','vision language action'] },
-  { tag: 'Humanoid',    keywords: ['humanoid','bipedal','whole-body','loco-manipulation'] },
-  { tag: 'Manipulation',keywords: ['manipulation','dexterous','grasping','grasp','in-hand'] },
-  { tag: 'Navigation',  keywords: ['navigation','path planning','obstacle avoidance','autonomous driving','self-driving'] },
-  { tag: 'NeRF / 3DGS', keywords: ['nerf','neural radiance','3d gaussian','gaussian splatting','implicit surface'] },
-  { tag: 'Diffusion',   keywords: ['diffusion model','diffusion policy','score matching','denoising'] },
-  { tag: 'Sim-to-Real', keywords: ['sim-to-real','sim2real','simulation to real','domain randomization','domain adaptation'] },
-  { tag: 'RL',          keywords: ['reinforcement learning','policy gradient','ppo','sac','rl agent','reward shaping'] },
-  { tag: 'Transformer', keywords: ['transformer','attention mechanism','self-attention','cross-attention','vision transformer','vit'] },
-  { tag: 'Dataset',     keywords: ['dataset','benchmark','data collection','annotation','ground truth'] },
-  { tag: 'Survey',      keywords: ['survey','review','overview','taxonomy'] },
+  { tag: 'VLA',            keywords: ['vision-language-action','vla','vision language action'] },
+  { tag: 'Humanoid',       keywords: ['humanoid','bipedal','whole-body','loco-manipulation'] },
+  { tag: 'Manipulation',   keywords: ['manipulation','dexterous','grasping','grasp','in-hand'] },
+  { tag: 'Navigation',     keywords: ['navigation','path planning','obstacle avoidance','autonomous driving','self-driving'] },
+  { tag: 'NeRF / 3DGS',   keywords: ['nerf','neural radiance','3d gaussian','gaussian splatting','implicit surface'] },
+  { tag: 'Digital Human',  keywords: ['digital human','human avatar','human reconstruction','human rendering','clothed human','free-viewpoint human','relightable human'] },
+  { tag: 'Gaussian Avatar',keywords: ['gaussian avatar','avatar gaussian','animatable gaussian','deformable gaussian','4d gaussian','dynamic gaussian','smpl'] },
+  { tag: 'Human Body',     keywords: ['human body','body reconstruction','parametric human','human pose','body model','pose estimation'] },
+  { tag: 'Diffusion',      keywords: ['diffusion model','diffusion policy','score matching','denoising'] },
+  { tag: 'Sim-to-Real',    keywords: ['sim-to-real','sim2real','simulation to real','domain randomization','domain adaptation'] },
+  { tag: 'RL',             keywords: ['reinforcement learning','policy gradient','ppo','sac','rl agent','reward shaping'] },
+  { tag: 'Transformer',    keywords: ['transformer','attention mechanism','self-attention','cross-attention','vision transformer','vit'] },
+  { tag: 'Dataset',        keywords: ['dataset','benchmark','data collection','annotation','ground truth'] },
+  { tag: 'Survey',         keywords: ['survey','review','overview','taxonomy'] },
 ];
 
 // Assign tags to each paper based on title + abstract keywords

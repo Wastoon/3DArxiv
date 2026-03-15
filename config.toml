@@ -36,6 +36,27 @@ limit = 60
 category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(gaussian+splatting)"
 title = "Gaussian Splatting"
 
+
+########################
+# Digital Human & Avatar
+########################
+
+[[sources]]
+limit = 80
+category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(digital+human+OR+human+avatar+OR+human+reconstruction+OR+human+rendering)"
+title = "Digital Human"
+
+[[sources]]
+limit = 80
+category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(gaussian+avatar+OR+avatar+gaussian+OR+3D+avatar+OR+animatable+gaussian)"
+title = "Gaussian Avatar"
+
+[[sources]]
+limit = 60
+category = "(cat:cs.CV+OR+cat:cs.GR)+AND+(human+body+OR+body+reconstruction+OR+SMPL+OR+parametric+human)"
+title = "Human Body"
+
+
 [[sources]]
 limit = 100
 category = "(cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.RO)+AND+(video+AND+world+AND+model)"

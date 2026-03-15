@@ -1,9 +1,11 @@
 /* --- DATA SECTION --- */
 let titles_type = ["Dataset", "Survey", "Review", "Overview", "World Model", "Video World Model", "Predictive World Model", "Foundation Model", "Benchmark"];
-let titles_model = ["SLAM", "Planning", "Diffusion", "Transformer", "Sora", "BEV", "Occupancy", "VLA", "Vision-Language-Action", "JEPA", "Dreamer", "Gaussian Splatting", "UniAD", "Video Generation"];
+let titles_model = ["SLAM", "Planning", "Diffusion", "Transformer", "Sora", "BEV", "Occupancy", "VLA", "Vision-Language-Action", "JEPA", "Dreamer", "Gaussian Splatting", "Gaussian Avatar", "UniAD", "Video Generation",
+"Digital Human", "Human Avatar", "Animatable", "SMPL", "NeRF Avatar", "Deformable Gaussian", "4D Gaussian", "Dynamic Gaussian"];
 let titles_method = ["End-to-End", "Self-Supervised", "Unsupervised", "Reinforcement", "Reinforcement Learning", "Imitation Learning", "Manipulation", "Dexterous", "Humanoid", "Sim-to-Real", "Real-to-Sim", 
 "embodied", "world model", "prediction", "trajectory", "motion planning", "control", "MPC", "decision making", "simulation", "simulator", "closed-loop", "interactive", "lane", "road", "urban", "scene", 
-"multi-modal", "zero-shot", "few-shot", "navigation", "grasp", "field", "nerf", "point cloud", "lidar", "radar", "sensor fusion", "calibration", "localization", "mapping"];
+"multi-modal", "zero-shot", "few-shot", "navigation", "grasp", "field", "nerf", "point cloud", "lidar", "radar", "sensor fusion", "calibration", "localization", "mapping",
+"human body", "body reconstruction", "human rendering", "relightable", "animatable", "clothed human", "free-viewpoint", "novel view synthesis"];
 
 let authors_array = [
     "Shaojie Shen", "Luca Carlone", "Yoshua Bengio", "Frank Dellaert", "Wolfram Burgard", 
@@ -13,7 +15,9 @@ let authors_array = [
     "Guofeng Zhang", "Cyrill Stachniss", "Javier Civera", "Jose Luis Blanco Claraco", 
     "Marco Pavone", "Sanja Fidler", "Yann LeCun", "Raquel Urtasun", 
     "Sergey Levine", "Chelsea Finn", "Jitendra Malik", "Danijar Hafner", "David Ha", 
-    "Andreas Geiger", "Philipp Krähenbühl", "Abhinav Gupta", "Animesh Garg"
+    "Andreas Geiger", "Philipp Krähenbühl", "Abhinav Gupta", "Animesh Garg",
+    "Michael Black", "Gerard Pons-Moll", "Yebin Liu", "Christian Theobalt", "Lingjie Liu",
+    "Justus Thies", "Matthias Niessner", "Gordon Wetzstein", "Hao Li"
 ];
 
 let conferences = [
@@ -24,12 +28,15 @@ let conferences = [
     // Computer Vision Top Tier
     "CVPR", "ICCV", "ECCV", "3DV", "WACV", "BMVC",
     // High Impact Journals
-    "Science Robotics", "Nature Machine Intelligence", "PAMI", "TIP", "T-RO",
+    "Science Robotics", "Nature Machine Intelligence", "PAMI", "TIP", "T-RO", "TOG", "TVCG",
     // System & Control
-    "CDC", "ACC", "T-CST", "TMECH", "TASE", "RAS"
+    "CDC", "ACC", "T-CST", "TMECH", "TASE", "RAS",
+    // Graphics
+    "SIGGRAPH", "SIGGRAPH Asia", "Eurographics", "EG"
 ];
 
-let top_labs = ["NVIDIA", "DeepMind", "OpenAI", "Google Research", "Stanford", "MIT", "Berkeley", "CMU", "ETH", "Oxford", "Meta AI", "Tesla"];
+let top_labs = ["NVIDIA", "DeepMind", "OpenAI", "Google Research", "Stanford", "MIT", "Berkeley", "CMU", "ETH", "Oxford", "Meta AI", "Tesla",
+"Max Planck", "MPI", "Tsinghua", "PKU", "NTU", "HKUST"];
 
 /* --- LOGIC SECTION --- */
 let titles =  titles_model + titles_method + titles_type;
