@@ -1206,3 +1206,225 @@ window.addEventListener('hashchange', handleDeepLink);
     });
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════
+// 访问统计 Dashboard — 读取 site_stats.json 展示 Umami 数据
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let siteStats = null;
+  let statsTabInited = false;
+
+  // 在统计 Dashboard 里加"访问统计"Tab
+  function injectVisitorTab() {
+    const dash = document.getElementById('stats-dashboard');
+    if (!dash) return;
+
+    const inner = dash.querySelector('.stats-dashboard-inner');
+    if (!inner) return;
+
+    // 给现有内容加 Tab 结构
+    const sdHeader = inner.querySelector('.sd-header');
+    if (!sdHeader) return;
+
+    // 如果已经注入过就跳过
+    if (inner.querySelector('.sd-tabs')) return;
+
+    // 创建 Tab 导航
+    const tabNav = document.createElement('div');
+    tabNav.className = 'sd-tabs';
+    tabNav.innerHTML = `
+      <button class="sd-tab active" data-tab="papers">
+        <i class="ri-bar-chart-2-line"></i> 论文统计
+      </button>
+      <button class="sd-tab" data-tab="visitors">
+        <i class="ri-global-line"></i> 访问统计
+      </button>`;
+    sdHeader.after(tabNav);
+
+    // 把原有 KPI + 图表包裹进论文 Tab
+    const kpiRow    = inner.querySelector('.sd-kpi-row');
+    const sdCharts  = inner.querySelector('.sd-charts');
+    const papersTab = document.createElement('div');
+    papersTab.className = 'sd-tab-content';
+    papersTab.dataset.tab = 'papers';
+    if (kpiRow)   papersTab.appendChild(kpiRow);
+    if (sdCharts) papersTab.appendChild(sdCharts);
+    inner.appendChild(papersTab);
+
+    // 创建访问统计 Tab 内容
+    const visitorsTab = document.createElement('div');
+    visitorsTab.className = 'sd-tab-content hidden';
+    visitorsTab.dataset.tab = 'visitors';
+    visitorsTab.innerHTML = `
+      <div class="vs-kpi-row" id="vs-kpi-row">
+        <div class="kpi-card"><div class="kpi-val" id="vs-pv">—</div><div class="kpi-label">页面浏览</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-uv">—</div><div class="kpi-label">独立访客</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-vis">—</div><div class="kpi-label">访问次数</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-time">—</div><div class="kpi-label">平均停留</div></div>
+      </div>
+      <div class="vs-charts">
+        <div class="chart-card chart-card--wide">
+          <div class="chart-card-title">每日访问趋势（近90天）</div>
+          <div class="chart-wrap"><canvas id="chart-daily-pv"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">访客国家分布</div>
+          <div id="vs-countries" class="vs-countries"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">流量来源</div>
+          <div id="vs-referrers" class="vs-referrers"></div>
+        </div>
+      </div>
+      <div class="vs-footer">
+        <span id="vs-generated">—</span>
+        <span>· 数据来自 <a href="https://umami.is" target="_blank" rel="noopener">Umami</a></span>
+      </div>`;
+    inner.appendChild(visitorsTab);
+
+    // Tab 切换逻辑
+    tabNav.addEventListener('click', e => {
+      const btn = e.target.closest('.sd-tab');
+      if (!btn) return;
+      const tab = btn.dataset.tab;
+      tabNav.querySelectorAll('.sd-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      inner.querySelectorAll('.sd-tab-content').forEach(c => c.classList.toggle('hidden', c.dataset.tab !== tab));
+      if (tab === 'visitors' && !statsTabInited) {
+        statsTabInited = true;
+        loadAndRenderStats();
+      }
+    });
+  }
+
+  async function loadAndRenderStats() {
+    const container = document.getElementById('vs-kpi-row');
+    if (container) {
+      container.innerHTML = `<div class="vs-loading"><i class="ri-loader-4-line vs-spin"></i> 加载中…</div>`;
+    }
+    try {
+      const r = await fetch('site_stats.json?t=' + Date.now());
+      if (!r.ok) throw new Error('site_stats.json not found');
+      siteStats = await r.json();
+      renderStats(siteStats);
+    } catch(e) {
+      if (container) {
+        container.innerHTML = `<div class="vs-empty">暂无访问数据<br><small>需配置 UMAMI_API_TOKEN 并等待 Actions 运行</small></div>`;
+      }
+    }
+  }
+
+  function fmt(n) {
+    if (n >= 10000) return (n/10000).toFixed(1) + '万';
+    if (n >= 1000)  return (n/1000).toFixed(1) + 'k';
+    return String(n || 0);
+  }
+
+  function fmtTime(ms) {
+    if (!ms) return '—';
+    const s = Math.round(ms / 1000);
+    if (s < 60)  return s + '秒';
+    const m = Math.floor(s / 60), rs = s % 60;
+    return `${m}分${rs}秒`;
+  }
+
+  function renderStats(data) {
+    const s = data.summary || {};
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // KPI
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const kpiRow = document.getElementById('vs-kpi-row');
+    if (kpiRow) {
+      kpiRow.innerHTML = `
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.pageviews)}</div><div class="kpi-label">页面浏览</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.visitors)}</div><div class="kpi-label">独立访客</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.visits)}</div><div class="kpi-label">访问次数</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmtTime(s.visits > 0 ? Math.round(s.totaltime / s.visits) : 0)}</div><div class="kpi-label">平均停留</div></div>`;
+    }
+
+    // 每日趋势图
+    const dailyCtx = document.getElementById('chart-daily-pv');
+    if (dailyCtx && data.daily?.length) {
+      const gridColor = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
+      const tickColor = isDark ? '#52525b' : '#a1a1aa';
+      const textColor = isDark ? '#a1a1aa' : '#52525b';
+      const existing  = Chart.getChart('chart-daily-pv');
+      if (existing) existing.destroy();
+      // 只显示最近 30 天
+      const recent = (data.daily || []).slice(-30);
+      new Chart(dailyCtx, {
+        type: 'line',
+        data: {
+          labels: recent.map(d => d.date.slice(5)),
+          datasets: [
+            { label: 'PV', data: recent.map(d => d.pageviews),
+              borderColor: isDark ? '#60a5fa':'#1d4ed8',
+              backgroundColor: isDark ? 'rgba(96,165,250,.1)':'rgba(29,78,216,.08)',
+              fill: true, tension: 0.3, pointRadius: 2, borderWidth: 1.5 },
+            { label: 'UV', data: recent.map(d => d.visitors),
+              borderColor: isDark ? '#34d399':'#059669',
+              backgroundColor: 'transparent',
+              tension: 0.3, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: textColor, boxWidth: 12, padding: 12 }}},
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: tickColor, maxRotation: 0, maxTicksLimit: 10 }},
+            y: { grid: { color: gridColor }, ticks: { color: tickColor }},
+          }
+        }
+      });
+    }
+
+    // 国家分布
+    const countriesEl = document.getElementById('vs-countries');
+    if (countriesEl && data.countries?.length) {
+      const max = data.countries[0]?.visitors || 1;
+      countriesEl.innerHTML = data.countries.slice(0, 12).map(c => `
+        <div class="vs-bar-row">
+          <span class="vs-bar-label">${c.name || c.country}</span>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill" style="width:${(c.visitors/max*100).toFixed(1)}%"></div>
+          </div>
+          <span class="vs-bar-val">${fmt(c.visitors)}</span>
+        </div>`).join('');
+    }
+
+    // 来源
+    const refEl = document.getElementById('vs-referrers');
+    if (refEl && data.referrers?.length) {
+      const maxR = data.referrers[0]?.count || 1;
+      refEl.innerHTML = data.referrers.slice(0, 8).map(r => `
+        <div class="vs-bar-row">
+          <span class="vs-bar-label">${r.name || '直接访问'}</span>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill vs-bar-fill--green" style="width:${(r.count/maxR*100).toFixed(1)}%"></div>
+          </div>
+          <span class="vs-bar-val">${fmt(r.count)}</span>
+        </div>`).join('');
+    }
+
+    // 生成时间
+    const genEl = document.getElementById('vs-generated');
+    if (genEl && data.generated) {
+      genEl.textContent = `数据更新于 ${data.generated.slice(0,10)}，统计近 ${data.range_days || 90} 天`;
+    }
+  }
+
+  // 在 stats dashboard 打开时注入 Tab
+  const statsBtn = document.getElementById('stats-btn');
+  const origStatsClick = statsBtn?.onclick;
+  statsBtn?.addEventListener('click', () => {
+    // 等 DOM 更新后注入
+    setTimeout(injectVisitorTab, 50);
+  });
+
+  // 主题切换时重渲染图表
+  document.querySelector('.theme-switch input')?.addEventListener('change', () => {
+    if (statsTabInited && siteStats) {
+      setTimeout(() => renderStats(siteStats), 60);
+    }
+  });
+})();

@@ -982,3 +982,87 @@ details[open] { display: block; }
   .logo-arxiv { font-size: 1rem; }
   .logo-3d    { font-size: 1.2rem; }
 }
+
+/* ═══════════════════════════════════════════
+   访问统计 Tab
+═══════════════════════════════════════════ */
+
+/* Tab 导航 */
+.sd-tabs {
+  display: flex; gap: 4px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--c-border);
+  margin-bottom: 16px;
+}
+.sd-tab {
+  height: 30px; padding: 0 14px;
+  border: 1.5px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface2); color: var(--c-text2);
+  font-size: .8rem; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  transition: all var(--t);
+}
+.sd-tab:hover { border-color: var(--c-accent); color: var(--c-accent); }
+.sd-tab.active {
+  background: var(--c-accent); border-color: var(--c-accent);
+  color: #fff;
+}
+
+/* Tab 内容 */
+.sd-tab-content { animation: fadeIn .15s ease; }
+
+/* KPI 行 */
+.vs-kpi-row {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width:700px) { .vs-kpi-row { grid-template-columns: repeat(2,1fr); } }
+
+/* 图表区 */
+.vs-charts {
+  display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px;
+}
+@media (max-width:900px) { .vs-charts { grid-template-columns: 1fr; } }
+
+/* 横向条形图 */
+.vs-bar-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px; font-size: .78rem;
+}
+.vs-bar-label {
+  width: 80px; flex-shrink: 0;
+  color: var(--c-text2); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  font-size: .75rem;
+}
+.vs-bar-track {
+  flex: 1; height: 6px; background: var(--c-border);
+  border-radius: 3px; overflow: hidden;
+}
+.vs-bar-fill {
+  height: 100%; border-radius: 3px;
+  background: var(--c-accent);
+  transition: width .4s ease;
+}
+.vs-bar-fill--green { background: var(--c-green); }
+.vs-bar-val {
+  width: 36px; text-align: right; flex-shrink: 0;
+  color: var(--c-text3); font-size: .72rem; font-family: var(--font-mono);
+}
+
+/* 加载 / 空状态 */
+.vs-loading, .vs-empty {
+  text-align: center; padding: 32px 16px;
+  color: var(--c-text3); font-size: .85rem; line-height: 2;
+  grid-column: 1/-1;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.vs-spin { display: inline-block; animation: spin .8s linear infinite; }
+
+/* 底部说明 */
+.vs-footer {
+  margin-top: 14px; font-size: .72rem;
+  color: var(--c-text3); font-family: var(--font-mono);
+}
+.vs-footer a { color: var(--c-text3); }
+.vs-footer a:hover { color: var(--c-accent); }
