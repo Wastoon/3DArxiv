@@ -1,4 +1,4 @@
-ii<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8"/>
@@ -208,6 +208,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 }
 .dp-rel-type.similar{background:rgba(124,92,252,.15);color:var(--accent2);border:1px solid rgba(124,92,252,.25)}
 .dp-rel-type.author{background:rgba(245,185,66,.1);color:var(--gold);border:1px solid rgba(245,185,66,.2)}
+.dp-rel-type.historical{background:rgba(61,214,140,.1);color:#3dd68c;border:1px solid rgba(61,214,140,.25)}
 .dp-rel-w{font-size:.65rem;color:var(--text3);font-family:var(--mono)}
 
 .dp-footer{
@@ -327,6 +328,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
     <div class="stat-row"><span class="stat-key">节点</span><span class="stat-val" id="stat-nodes">—</span></div>
     <div class="stat-row"><span class="stat-key">连线</span><span class="stat-val" id="stat-edges">—</span></div>
     <div class="stat-row"><span class="stat-key">精选</span><span class="stat-val" id="stat-featured">—</span></div>
+    <div class="stat-row"><span class="stat-key">历史</span><span class="stat-val" id="stat-hist">—</span></div>
     <div class="stat-row"><span class="stat-key">更新</span><span class="stat-val" id="stat-date">—</span></div>
   </div>
 </div>
@@ -365,10 +367,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 
 <!-- Legend -->
 <div id="legend">
-  <div class="lg-row"><div class="lg-dot" style="background:#f5b942;box-shadow:0 0 6px #f5b942"></div> 顶级作者 / 机构</div>
-  <div class="lg-row"><div class="lg-dot" style="background:#4f8ef7;box-shadow:0 0 6px #4f8ef7"></div> 顶会论文</div>
-  <div class="lg-row"><div class="lg-dot" style="background:#3dd68c"></div> 普通论文</div>
-  <div class="lg-row"><div class="lg-line" style="background:rgba(124,92,252,.6)"></div> 文本相似</div>
+  <div class="lg-row"><div class="lg-dot" style="background:#4f8ef7;box-shadow:0 0 6px #4f8ef7"></div> 本周新论文</div>
+  <div class="lg-row"><div class="lg-dot" style="background:#f5b942;box-shadow:0 0 6px #f5b942"></div> 顶会 / 顶级作者</div>
+  <div class="lg-row"><div class="lg-dot" style="background:#888;border:1.5px dashed #aaa"></div> 历史相关论文</div>
+  <div class="lg-row"><div class="lg-line" style="background:rgba(124,92,252,.6)"></div> 语义相似</div>
+  <div class="lg-row"><div class="lg-line" style="background:rgba(61,214,140,.5)"></div> 历史关联</div>
   <div class="lg-row"><div class="lg-line" style="background:rgba(245,185,66,.5)"></div> 共同作者</div>
 </div>
 
@@ -459,6 +462,9 @@ async function loadGraph() {
   if (data.meta?.generated) {
     document.getElementById('stat-date').textContent = data.meta.generated.slice(0,10);
   }
+  if (data.meta?.hist_papers !== undefined) {
+    document.getElementById('stat-hist').textContent = data.meta.hist_papers;
+  }
 
   setProgress(60, '初始化布局…');
   initGraph();
@@ -520,6 +526,7 @@ function nodeRadius(n) {
 }
 
 function nodeColor(n) {
+  if (n.nodeType === 'historical') return '#666677';
   if (n.hasConf && isStar(n)) return '#f5b942';
   if (n.hasConf)  return '#4f8ef7';
   if (isStar(n))  return '#3dd68c';
@@ -668,15 +675,23 @@ function draw() {
     ctx.lineTo(b.x, b.y);
 
     if (isSelected) {
-      ctx.strokeStyle = e.type==='author' ? 'rgba(245,185,66,.8)' : 'rgba(124,92,252,.8)';
+      ctx.strokeStyle = e.type==='author'     ? 'rgba(245,185,66,.9)'
+                      : e.type==='historical' ? 'rgba(61,214,140,.9)'
+                      : 'rgba(124,92,252,.9)';
       ctx.lineWidth   = 1.5;
       ctx.globalAlpha = 1;
     } else {
-      ctx.strokeStyle = e.type==='author' ? '#f5b942' : '#7c5cfc';
-      ctx.lineWidth   = e.weight > 0.5 ? 1.2 : 0.7;
-      ctx.globalAlpha = baseAlpha + (e.weight||0)*0.08;
+      ctx.strokeStyle = e.type==='author'     ? '#f5b942'
+                      : e.type==='historical' ? '#3dd68c'
+                      : '#7c5cfc';
+      ctx.lineWidth   = e.type==='historical' ? 0.8 : (e.weight > 0.5 ? 1.2 : 0.7);
+      ctx.globalAlpha = e.type==='historical'
+                      ? baseAlpha * 0.6
+                      : baseAlpha + (e.weight||0)*0.08;
     }
+    if (e.type==='historical') ctx.setLineDash([3,3]);
     ctx.stroke();
+    ctx.setLineDash([]);
   });
   ctx.restore();
 
@@ -714,8 +729,19 @@ function draw() {
     // Node circle
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fillStyle = n.color;
-    ctx.fill();
+    if (n.nodeType === 'historical') {
+      // 历史节点：半透明填充 + 虚线边框
+      ctx.fillStyle = 'rgba(102,102,119,.35)';
+      ctx.fill();
+      ctx.setLineDash([2, 2]);
+      ctx.strokeStyle = '#9999aa';
+      ctx.lineWidth   = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = n.color;
+      ctx.fill();
+    }
 
     // Selected ring
     if (isSelected) {
@@ -851,7 +877,9 @@ function selectNode(node) {
   selectedId = node.id;
 
   // Detail panel
-  document.getElementById('dp-subject').textContent = node.subject;
+  const isHist = node.nodeType === 'historical';
+  document.getElementById('dp-subject').textContent =
+    isHist ? '📚 历史相关 · ' + node.subject : node.subject;
   document.getElementById('dp-title').textContent   = node.title;
   document.getElementById('dp-authors').textContent = node.authors;
   document.getElementById('dp-abstract').textContent = (node.summary||'').slice(0,600) + ((node.summary||'').length>600?'…':'');
@@ -883,7 +911,7 @@ function selectNode(node) {
       <div class="dp-rel-item" data-id="${e.other.id}">
         <div class="dp-rel-title">${e.other.title.slice(0,70)}${e.other.title.length>70?'…':''}</div>
         <div class="dp-rel-meta">
-          <span class="dp-rel-type ${e.type}">${e.type==='author'?'共同作者':'文本相似'}</span>
+          <span class="dp-rel-type ${e.type}">${e.type==='author'?'共同作者':e.type==='historical'?'历史关联':'语义相似'}</span>
           <span class="dp-rel-w">${e.type==='similar'?(e.weight*100).toFixed(0)+'%':e.label||''}</span>
         </div>
       </div>`).join('');
