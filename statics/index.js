@@ -542,13 +542,13 @@ function showAiPanel(btn, tldr) {
     // 没有预生成：跳转 Claude 网页
     const abstract = paperBody?.querySelector('.paper-abstract')?.textContent?.trim() || '';
     const title    = btn.dataset.title || '';
-    const prompt   = \`请对以下学术论文进行简洁的中文解读：\n\n**论文标题：** \${title}\n\n**摘要原文：**\n\${abstract}\n\n请用以下格式回答：\n**一句话总结：** [用一句话说明这篇论文做了什么]\n**核心方法：** [2-3句话描述核心方法]\n**主要结论：** [1-2句话总结实验结论]\`;
+    const prompt   = `请对以下学术论文进行简洁的中文解读：\n\n**论文标题：** ${title}\n\n**摘要原文：**\n${abstract}\n\n请用以下格式回答：\n**一句话总结：** [用一句话说明这篇论文做了什么]\n**核心方法：** [2-3句话描述核心方法]\n**主要结论：** [1-2句话总结实验结论]`;
     window.open('https://claude.ai/new?q=' + encodeURIComponent(prompt), '_blank', 'noopener');
-    aiPanel.innerHTML = \`
+    aiPanel.innerHTML = `
       <div class="ai-panel-hd"><i class="ri-sparkling-2-line"></i> AI 中文解读</div>
       <div style="font-size:.82rem;color:var(--c-text2);line-height:1.7">
         已在新标签页打开 Claude，论文摘要已自动填入。
-      </div>\`;
+      </div>`;
   }
   btn.closest('.paper-actions').after(aiPanel);
 }
@@ -591,7 +591,7 @@ async function loadSummaries() {
       const stat = document.createElement('span');
       stat.className = 'sb-stat';
       stat.style.color = 'var(--c-purple)';
-      stat.innerHTML = \`<i class="ri-sparkling-2-line"></i> \${count} AI摘要\`;
+      stat.innerHTML = `<i class="ri-sparkling-2-line"></i> ${count} AI摘要`;
       sbRead.after(stat);
       sbRead.after(info);
     }
