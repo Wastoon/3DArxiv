@@ -63,14 +63,24 @@ jobs:
       - name: Generate RSS Feed
         run: python scripts/generate_rss.py
 
-      # ── 6. Generate Graph Data (for 3D knowledge graph) ──
+      # ── 6. Generate Graph Data ────────────────────────
       - name: Generate Graph Data
         run: python scripts/generate_graph.py
 
-      # ── 7. Deploy everything to GitHub Pages ─────────
+      # ── 7. Deploy to GitHub Pages ─────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target
           force_orphan: true
+
+      # ── 8. Telegram notification ──────────────────────
+      # 只在每日定时触发时推送，手动/push 触发时跳过
+      # 若需要每次都推送，删除下方 if 行即可
+      - name: Notify Telegram
+        if: github.event_name == 'schedule'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/notify_telegram.py
