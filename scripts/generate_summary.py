@@ -25,7 +25,7 @@ CACHE_PATH   = Path("./target/cache.json")
 SUMMARY_PATH = Path("./target/summary.json")
 
 API_KEY   = os.environ.get("GEMINI_API_KEY", "")
-API_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+API_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 # 每次 Actions 最多处理 N 篇新论文（控制 API 用量和运行时间）
 MAX_NEW_PER_RUN = 80
