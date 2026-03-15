@@ -1428,3 +1428,977 @@ window.addEventListener('hashchange', handleDeepLink);
     }
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════
+// 个性化推荐 — 基于收藏夹 × graph.json embedding 向量
+// ═══════════════════════════════════════════════════════════════
+(function() {
+
+  // ── 向量工具 ────────────────────────────────────────────────
+  function cosine(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      na  += a[i] * a[i];
+      nb  += b[i] * b[i];
+    }
+    return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-9);
+  }
+
+  function avgVector(vecs) {
+    if (!vecs.length) return null;
+    const dim = vecs[0].length;
+    const avg = new Float32Array(dim);
+    for (const v of vecs) for (let i = 0; i < dim; i++) avg[i] += v[i];
+    const norm = Math.sqrt(avg.reduce((s,x) => s + x*x, 0)) || 1;
+    return Array.from(avg).map(x => x / norm);
+  }
+
+  // ── 数据加载 ────────────────────────────────────────────────
+  let graphCache = null;
+  async function loadGraph() {
+    if (graphCache) return graphCache;
+    try {
+      const r = await fetch('graph.json?t=' + Date.now());
+      if (!r.ok) return null;
+      graphCache = await r.json();
+      return graphCache;
+    } catch(e) { return null; }
+  }
+
+  // embeddings.json 单独存储，但 graph.json 里的节点没有 vec 字段
+  // 需要从 data/embeddings.json 读取（gh-pages 不部署 data/，改用专用端点）
+  // 实际上 embeddings 已经很大，改为：直接用 graph.json 的边做协同过滤
+  // 具体：找收藏论文的相邻节点（similar/historical 边），按出现频率排序
+
+  function getRecommendations(bookmarkedIds, graph, limit = 10) {
+    if (!graph?.edges || !graph?.nodes) return [];
+
+    const bmSet   = new Set(bookmarkedIds);
+    const nodeMap = new Map((graph.nodes||[]).map(n => [n.id, n]));
+    const score   = new Map(); // id → score
+
+    // 遍历所有边，找和收藏论文相连的节点
+    for (const e of graph.edges) {
+      if (e.type === 'author') continue; // 只用语义边
+      const isBmSrc = bmSet.has(e.source);
+      const isBmTgt = bmSet.has(e.target);
+      if (!isBmSrc && !isBmTgt) continue;
+
+      const otherId = isBmSrc ? e.target : e.source;
+      if (bmSet.has(otherId)) continue; // 已收藏的不推荐
+
+      const weight = e.weight || 0.5;
+      score.set(otherId, (score.get(otherId) || 0) + weight);
+    }
+
+    // 按得分排序
+    return [...score.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id, sc]) => ({ node: nodeMap.get(id), score: sc }))
+      .filter(r => r.node);
+  }
+
+  // ── UI ──────────────────────────────────────────────────────
+  function buildRecoPanel() {
+    const existing = document.getElementById('reco-panel');
+    if (existing) { existing.classList.toggle('hidden'); return; }
+
+    const panel = document.createElement('aside');
+    panel.id = 'reco-panel';
+    panel.className = 'reco-panel';
+    panel.innerHTML = `
+      <div class="reco-header">
+        <span class="reco-title"><i class="ri-magic-line"></i> 为你推荐</span>
+        <button class="reco-close" id="reco-close"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="reco-body" id="reco-body">
+        <div class="reco-loading"><i class="ri-loader-4-line reco-spin"></i> 分析收藏中…</div>
+      </div>
+      <div class="reco-footer">基于你的 <span id="reco-bm-count">0</span> 篇收藏 · 语义相似推荐</div>`;
+
+    document.body.appendChild(panel);
+    document.getElementById('reco-close')?.addEventListener('click', () => {
+      panel.classList.add('hidden');
+      document.getElementById('reco-btn')?.classList.remove('active');
+    });
+
+    loadAndRender(panel);
+  }
+
+  async function loadAndRender(panel) {
+    const body = document.getElementById('reco-body');
+
+    // 读取收藏夹
+    let bookmarks = {};
+    try { bookmarks = JSON.parse(localStorage.getItem('arxiv-bm') || '{}'); } catch(e) {}
+    const bmIds = Object.keys(bookmarks);
+
+    const countEl = document.getElementById('reco-bm-count');
+    if (countEl) countEl.textContent = bmIds.length;
+
+    if (!bmIds.length) {
+      body.innerHTML = `<div class="reco-empty">
+        <i class="ri-bookmark-line" style="font-size:2rem;display:block;margin-bottom:8px"></i>
+        收藏几篇感兴趣的论文<br>即可获得个性化推荐
+      </div>`;
+      return;
+    }
+
+    const graph = await loadGraph();
+    if (!graph) {
+      body.innerHTML = `<div class="reco-empty">图谱数据加载失败</div>`;
+      return;
+    }
+
+    const recs = getRecommendations(bmIds, graph, 12);
+
+    if (!recs.length) {
+      body.innerHTML = `<div class="reco-empty">
+        暂无推荐<br>
+        <small>图谱数据积累后将自动推荐</small>
+      </div>`;
+      return;
+    }
+
+    body.innerHTML = recs.map(({ node, score }) => {
+      const conf  = node.confName ? `<span class="reco-conf">${node.confName}</span>` : '';
+      const tags  = (node.tags||[]).slice(0,2).map(t =>
+        `<span class="reco-tag">${t}</span>`).join('');
+      const pct   = Math.min(100, Math.round(score * 80 + 20)); // 视觉化分数
+      const arxiv = node.id || '#';
+      return `
+        <div class="reco-item" data-id="${node.id}">
+          <div class="reco-item-score-bar" style="width:${pct}%"></div>
+          <div class="reco-item-content">
+            <div class="reco-item-title">${node.title}</div>
+            <div class="reco-item-meta">
+              ${conf}${tags}
+              <span class="reco-item-subject">${node.subject||''}</span>
+            </div>
+            <div class="reco-item-actions">
+              <a class="reco-action" href="${arxiv}" target="_blank" rel="noopener">
+                <i class="ri-external-link-line"></i> arXiv
+              </a>
+              <button class="reco-action reco-bm-btn" data-id="${node.id}" data-title="${(node.title||'').replace(/"/g,'&quot;')}" data-authors="${(node.authors||'').replace(/"/g,'&quot;')}">
+                <i class="ri-bookmark-line"></i> 收藏
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // 收藏按钮事件
+    body.querySelectorAll('.reco-bm-btn').forEach(btn => {
+      const id = btn.dataset.id;
+      // 检查是否已收藏
+      let bm = {};
+      try { bm = JSON.parse(localStorage.getItem('arxiv-bm')||'{}'); } catch(e) {}
+      if (bm[id]) { btn.innerHTML = '<i class="ri-bookmark-fill"></i> 已收藏'; btn.classList.add('bookmarked'); }
+
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        let bms = {};
+        try { bms = JSON.parse(localStorage.getItem('arxiv-bm')||'{}'); } catch(e) {}
+        if (bms[id]) {
+          delete bms[id];
+          btn.innerHTML = '<i class="ri-bookmark-line"></i> 收藏';
+          btn.classList.remove('bookmarked');
+        } else {
+          bms[id] = { title: btn.dataset.title, authors: btn.dataset.authors, url: id, note: '' };
+          btn.innerHTML = '<i class="ri-bookmark-fill"></i> 已收藏';
+          btn.classList.add('bookmarked');
+        }
+        localStorage.setItem('arxiv-bm', JSON.stringify(bms));
+        // 同步主页收藏数
+        const badge = document.getElementById('bookmark-count');
+        const n = Object.keys(bms).length;
+        if (badge) { badge.textContent = n; badge.classList.toggle('hidden', n===0); }
+      });
+    });
+  }
+
+  // ── 注入推荐按钮到 header-actions ────────────────────────
+  function injectRecoBtn() {
+    const actions = document.querySelector('.header-actions');
+    if (!actions || document.getElementById('reco-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'reco-btn';
+    btn.className = 'hbtn';
+    btn.title = '个性化推荐';
+    btn.innerHTML = '<i class="ri-magic-line"></i>';
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      buildRecoPanel();
+    });
+    // 插到 nav-btn 前面
+    const navBtn = document.getElementById('nav-btn');
+    if (navBtn) actions.insertBefore(btn, navBtn);
+    else actions.prepend(btn);
+  }
+
+  injectRecoBtn();
+
+  // 收藏操作后实时刷新推荐（如果推荐面板已打开）
+  document.addEventListener('click', e => {
+    const bmBtn = e.target.closest('.bookmark-btn');
+    if (!bmBtn) return;
+    const panel = document.getElementById('reco-panel');
+    if (panel && !panel.classList.contains('hidden')) {
+      // 延迟刷新，等收藏状态更新
+      setTimeout(() => loadAndRender(panel), 100);
+    }
+  });
+
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 领域热度趋势 — 在统计 Dashboard 加"热度趋势" Tab
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let trendInited = false;
+
+  // ── 从 DOM 数据计算趋势 ─────────────────────────────────────
+  // DATA 已有 { date, subjects: { name: { count, featured } } }
+  function buildTrendData() {
+    // 收集所有领域名
+    const subjSet = new Set();
+    DATA.forEach(d => Object.keys(d.subjects).forEach(s => subjSet.add(s)));
+    const subjects = [...subjSet];
+
+    // 只保留总量 top 8 的领域（避免图太乱）
+    const totalBySubj = {};
+    subjects.forEach(s => {
+      totalBySubj[s] = DATA.reduce((sum, d) => sum + (d.subjects[s]?.count || 0), 0);
+    });
+    const topSubjects = subjects
+      .sort((a, b) => totalBySubj[b] - totalBySubj[a])
+      .slice(0, 8);
+
+    // 日期序列（倒序 → 正序）
+    const dates = [...DATA].reverse().map(d => d.date.slice(5));
+
+    // 每个领域按日期的数据
+    const datasets = topSubjects.map((subj, i) => {
+      const palette = [
+        '#60a5fa','#34d399','#a78bfa','#f87171',
+        '#fbbf24','#38bdf8','#fb923c','#e879f9'
+      ];
+      const paletteDark = palette;
+      const paletteLight = [
+        '#1d4ed8','#059669','#7c3aed','#dc2626',
+        '#d97706','#0284c7','#ea580c','#c026d3'
+      ];
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const color  = isDark ? paletteDark[i] : paletteLight[i];
+      const data   = [...DATA].reverse().map(d => d.subjects[subj]?.count || 0);
+      return { label: subj.length > 18 ? subj.slice(0,17)+'…' : subj,
+               data, borderColor: color, backgroundColor: color + '18',
+               tension: 0.35, pointRadius: 2, borderWidth: 1.8, fill: false };
+    });
+
+    return { dates, datasets, topSubjects, totalBySubj };
+  }
+
+  // ── 计算各领域环比增长率（最近7天 vs 前7天）──────────────────
+  function buildGrowthData() {
+    if (DATA.length < 2) return [];
+    const recent = DATA.slice(0, Math.min(7, DATA.length));
+    const prev   = DATA.slice(Math.min(7, DATA.length), Math.min(14, DATA.length));
+    if (!prev.length) return [];
+
+    const subjSet = new Set();
+    DATA.forEach(d => Object.keys(d.subjects).forEach(s => subjSet.add(s)));
+
+    return [...subjSet].map(s => {
+      const r = recent.reduce((sum, d) => sum + (d.subjects[s]?.count || 0), 0);
+      const p = prev.reduce((sum, d) => sum + (d.subjects[s]?.count || 0), 0);
+      const growth = p > 0 ? ((r - p) / p * 100) : (r > 0 ? 100 : 0);
+      return { subject: s, recent: r, prev: p, growth: Math.round(growth) };
+    })
+    .filter(x => x.recent > 0 || x.prev > 0)
+    .sort((a, b) => b.growth - a.growth);
+  }
+
+  // ── 注入热度趋势 Tab ─────────────────────────────────────────
+  function injectTrendTab() {
+    const inner = document.querySelector('.stats-dashboard-inner');
+    if (!inner) return;
+
+    const tabs = inner.querySelector('.sd-tabs');
+    if (!tabs) return;
+
+    // 如果已有趋势 Tab 就跳过
+    if (tabs.querySelector('[data-tab="trend"]')) return;
+
+    // 在论文统计 / 访问统计 后面加趋势 Tab
+    const trendTabBtn = document.createElement('button');
+    trendTabBtn.className = 'sd-tab';
+    trendTabBtn.dataset.tab = 'trend';
+    trendTabBtn.innerHTML = '<i class="ri-line-chart-line"></i> 热度趋势';
+    tabs.appendChild(trendTabBtn);
+
+    // 创建趋势 Tab 内容
+    const trendContent = document.createElement('div');
+    trendContent.className = 'sd-tab-content hidden';
+    trendContent.dataset.tab = 'trend';
+    trendContent.innerHTML = `
+      <div class="trend-top">
+        <div class="chart-card chart-card--wide">
+          <div class="chart-card-title">各领域论文数量趋势</div>
+          <div class="chart-wrap" style="height:220px"><canvas id="chart-trend-line"></canvas></div>
+        </div>
+      </div>
+      <div class="trend-bottom">
+        <div class="chart-card">
+          <div class="chart-card-title">近7天 vs 上周 增长率</div>
+          <div id="trend-growth" class="trend-growth"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">子方向标签热度</div>
+          <div id="trend-tags" class="trend-tags"></div>
+        </div>
+      </div>`;
+    inner.appendChild(trendContent);
+
+    // Tab 切换联动
+    tabs.addEventListener('click', e => {
+      const btn = e.target.closest('.sd-tab');
+      if (!btn || btn.dataset.tab !== 'trend') return;
+      if (!trendInited) {
+        trendInited = true;
+        renderTrend();
+      }
+    });
+
+    // 主题切换时重渲染
+    document.querySelector('.theme-switch input')?.addEventListener('change', () => {
+      if (trendInited) setTimeout(renderTrend, 60);
+    });
+  }
+
+  function renderTrend() {
+    const isDark     = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor  = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
+    const tickColor  = isDark ? '#52525b' : '#a1a1aa';
+    const textColor  = isDark ? '#a1a1aa' : '#52525b';
+
+    const { dates, datasets } = buildTrendData();
+
+    // ── 折线趋势图 ─────────────────────────────────────────
+    const trendCtx = document.getElementById('chart-trend-line');
+    if (trendCtx) {
+      const existing = Chart.getChart('chart-trend-line');
+      if (existing) existing.destroy();
+      new Chart(trendCtx, {
+        type: 'line',
+        data: { labels: dates, datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { color: textColor, boxWidth: 10, padding: 10, font: { size: 10 } }
+            },
+            tooltip: { callbacks: {
+              title: items => items[0].label,
+              label: item => ` ${item.dataset.label}: ${item.raw} 篇`
+            }}
+          },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: tickColor, maxRotation: 0, maxTicksLimit: 10 }},
+            y: { grid: { color: gridColor }, ticks: { color: tickColor },
+                 title: { display: true, text: '论文数', color: tickColor, font: { size: 10 } }}
+          }
+        }
+      });
+    }
+
+    // ── 增长率排行 ────────────────────────────────────────
+    const growthEl = document.getElementById('trend-growth');
+    if (growthEl) {
+      const growthData = buildGrowthData();
+      if (!growthData.length) {
+        growthEl.innerHTML = '<div style="font-size:.8rem;color:var(--c-text3);padding:20px;text-align:center">数据不足（需要至少14天数据）</div>';
+      } else {
+        const maxAbs = Math.max(...growthData.map(x => Math.abs(x.growth)), 1);
+        growthEl.innerHTML = growthData.slice(0, 10).map(x => {
+          const pct    = Math.min(100, (Math.abs(x.growth) / maxAbs) * 100);
+          const isUp   = x.growth >= 0;
+          const color  = isUp
+            ? (isDark ? '#34d399' : '#059669')
+            : (isDark ? '#f87171' : '#dc2626');
+          const arrow  = isUp ? '↑' : '↓';
+          const label  = x.subject.length > 16 ? x.subject.slice(0,15)+'…' : x.subject;
+          return `
+            <div class="growth-row">
+              <span class="growth-label">${label}</span>
+              <div class="growth-bar-track">
+                <div class="growth-bar-fill" style="width:${pct}%;background:${color}20;"></div>
+              </div>
+              <span class="growth-val" style="color:${color}">${arrow}${Math.abs(x.growth)}%</span>
+              <span class="growth-sub">${x.recent}篇</span>
+            </div>`;
+        }).join('');
+      }
+    }
+
+    // ── 子方向标签热度（基于 TAG_RULES 关键词匹配的论文数）────
+    const tagsEl = document.getElementById('trend-tags');
+    if (tagsEl && typeof TAG_RULES !== 'undefined') {
+      // 统计每个 tag 近7天命中的论文数
+      const tagCounts7 = {};
+      const tagCountsAll = {};
+      TAG_RULES.forEach(r => { tagCounts7[r.tag] = 0; tagCountsAll[r.tag] = 0; });
+
+      const recent7Papers = new Set();
+      DATA.slice(0, 7).forEach(d => {
+        document.querySelectorAll('.paper-item').forEach(item => {
+          const date = item.closest('.day-section')?.querySelector('.day-date time')
+            ?.getAttribute('datetime')?.slice(0,10);
+          if (date !== d.date) return;
+          (item.dataset.tags || '').split(',').filter(Boolean).forEach(t => {
+            if (t in tagCounts7) tagCounts7[t]++;
+          });
+        });
+      });
+      document.querySelectorAll('.paper-item').forEach(item => {
+        (item.dataset.tags || '').split(',').filter(Boolean).forEach(t => {
+          if (t in tagCountsAll) tagCountsAll[t]++;
+        });
+      });
+
+      // 用已有的 tagCounts（从 DOM 收集）做展示
+      const allTagData = TAG_RULES
+        .map(r => ({ tag: r.tag, count: tagCountsAll[r.tag] || 0 }))
+        .filter(x => x.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      if (!allTagData.length) {
+        tagsEl.innerHTML = '<div style="font-size:.8rem;color:var(--c-text3);padding:20px;text-align:center">暂无标签数据</div>';
+      } else {
+        const maxC = allTagData[0].count;
+        tagsEl.innerHTML = allTagData.map((x, i) => {
+          const pct = (x.count / maxC * 100).toFixed(1);
+          const colors = isDark
+            ? ['#60a5fa','#34d399','#a78bfa','#f87171','#fbbf24','#38bdf8','#fb923c','#e879f9','#86efac','#fda4af','#c4b5fd','#6ee7b7','#fca5a5','#fde68a']
+            : ['#1d4ed8','#059669','#7c3aed','#dc2626','#d97706','#0284c7','#ea580c','#c026d3','#16a34a','#e11d48','#4f46e5','#0d9488','#b91c1c','#92400e'];
+          const color = colors[i % colors.length];
+          return `
+            <div class="tag-heat-row">
+              <span class="tag-heat-label">${x.tag}</span>
+              <div class="tag-heat-track">
+                <div class="tag-heat-fill" style="width:${pct}%;background:${color}"></div>
+              </div>
+              <span class="tag-heat-val">${x.count}</span>
+            </div>`;
+        }).join('');
+      }
+    }
+  }
+
+  // stats btn 打开时注入趋势 Tab
+  document.getElementById('stats-btn')?.addEventListener('click', () => {
+    setTimeout(injectTrendTab, 80);
+  });
+
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 作者/关键词订阅 — localStorage 持久化，页面加载时自动匹配高亮
+// ═══════════════════════════════════════════════════════════════
+(function() {
+
+  const SUB_KEY = 'arxiv-subscriptions';
+
+  // ── 数据结构 ─────────────────────────────────────────────────
+  // { authors: ["Yann LeCun", ...], keywords: ["diffusion policy", ...] }
+  function loadSubs() {
+    try { return JSON.parse(localStorage.getItem(SUB_KEY) || '{"authors":[],"keywords":[]}'); }
+    catch(e) { return { authors: [], keywords: [] }; }
+  }
+  function saveSubs(subs) { localStorage.setItem(SUB_KEY, JSON.stringify(subs)); }
+
+  // ── 匹配逻辑 ────────────────────────────────────────────────
+  function matchPaper(item, subs) {
+    const text    = (item.dataset.search || '').toLowerCase();
+    const authors = (item.dataset.authors || '').toLowerCase();
+    const title   = (item.dataset.title   || '').toLowerCase();
+
+    const matchedAuthors  = subs.authors.filter(a => authors.includes(a.toLowerCase()));
+    const matchedKeywords = subs.keywords.filter(k => title.includes(k.toLowerCase()) || text.includes(k.toLowerCase()));
+    return { matchedAuthors, matchedKeywords,
+             matched: matchedAuthors.length > 0 || matchedKeywords.length > 0 };
+  }
+
+  // ── 应用订阅高亮 ─────────────────────────────────────────────
+  function applySubscriptions() {
+    const subs = loadSubs();
+    const hasAny = subs.authors.length > 0 || subs.keywords.length > 0;
+    let hitCount = 0;
+
+    document.querySelectorAll('.paper-item').forEach(item => {
+      item.classList.remove('sub-match');
+      const existing = item.querySelector('.sub-badge');
+      if (existing) existing.remove();
+
+      if (!hasAny) return;
+      const { matched, matchedAuthors, matchedKeywords } = matchPaper(item, subs);
+      if (!matched) return;
+
+      hitCount++;
+      item.classList.add('sub-match');
+
+      // 在论文标题前插入订阅命中标记
+      const titleWrap = item.querySelector('.paper-title-wrap');
+      if (titleWrap) {
+        const badge = document.createElement('span');
+        badge.className = 'sub-badge';
+        const tips = [...matchedAuthors, ...matchedKeywords].slice(0, 2).join(', ');
+        badge.title = `订阅命中：${tips}`;
+        badge.innerHTML = '<i class="ri-notification-2-fill"></i>';
+        titleWrap.prepend(badge);
+      }
+    });
+
+    // 更新 summary bar 提示
+    const sbRead = document.getElementById('sb-read');
+    let subHint  = document.getElementById('sb-sub-hint');
+    if (hasAny) {
+      if (!subHint) {
+        subHint = document.createElement('span');
+        subHint.id = 'sb-sub-hint';
+        subHint.className = 'sb-stat sb-sub-hint';
+        const sep = document.createElement('span');
+        sep.className = 'sb-sep'; sep.textContent = '·';
+        sbRead?.after(sep); sbRead?.after(subHint);
+      }
+      subHint.innerHTML = `<i class="ri-notification-2-fill"></i> 订阅命中 ${hitCount} 篇`;
+      subHint.style.color = hitCount > 0 ? 'var(--c-accent)' : 'var(--c-text3)';
+      subHint.style.cursor = 'pointer';
+      subHint.onclick = () => {
+        // 点击后滚动到第一篇命中的论文
+        const first = document.querySelector('.paper-item.sub-match');
+        if (first) {
+          first.closest('.subject-block')?.querySelector('details')?.setAttribute('open','');
+          first.scrollIntoView({ behavior:'smooth', block:'center' });
+        }
+      };
+    } else if (subHint) {
+      subHint.remove();
+    }
+  }
+
+  // ── 订阅管理面板 ─────────────────────────────────────────────
+  function buildSubPanel() {
+    const existing = document.getElementById('sub-panel');
+    if (existing) {
+      existing.classList.toggle('hidden');
+      document.getElementById('sub-btn')?.classList.toggle('active', !existing.classList.contains('hidden'));
+      return;
+    }
+
+    const panel = document.createElement('aside');
+    panel.id = 'sub-panel';
+    panel.className = 'sub-panel';
+    panel.innerHTML = `
+      <div class="sub-header">
+        <span class="sub-title"><i class="ri-notification-2-line"></i> 订阅关注</span>
+        <button class="sub-close" id="sub-close"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="sub-body">
+        <!-- 作者订阅 -->
+        <div class="sub-section">
+          <div class="sub-section-label">
+            <i class="ri-user-follow-line"></i> 关注作者
+            <span class="sub-hint">论文作者列表中包含时提醒</span>
+          </div>
+          <div class="sub-input-row">
+            <input type="text" id="sub-author-input" class="sub-input"
+                   placeholder="输入作者姓名，如 Yann LeCun" autocomplete="off"/>
+            <button class="sub-add-btn" id="sub-author-add">
+              <i class="ri-add-line"></i>
+            </button>
+          </div>
+          <div class="sub-tags" id="sub-author-tags"></div>
+        </div>
+
+        <!-- 关键词订阅 -->
+        <div class="sub-section">
+          <div class="sub-section-label">
+            <i class="ri-key-2-line"></i> 关注关键词
+            <span class="sub-hint">出现在标题或摘要中时提醒</span>
+          </div>
+          <div class="sub-input-row">
+            <input type="text" id="sub-kw-input" class="sub-input"
+                   placeholder="输入关键词，如 diffusion policy" autocomplete="off"/>
+            <button class="sub-add-btn" id="sub-kw-add">
+              <i class="ri-add-line"></i>
+            </button>
+          </div>
+          <div class="sub-tags" id="sub-kw-tags"></div>
+        </div>
+
+        <!-- 快速添加推荐 -->
+        <div class="sub-section">
+          <div class="sub-section-label">
+            <i class="ri-lightbulb-line"></i> 快速添加
+          </div>
+          <div class="sub-quick" id="sub-quick-authors">
+            <div class="sub-quick-label">来自 config 的顶级作者</div>
+            <div class="sub-quick-chips" id="sub-quick-author-chips"></div>
+          </div>
+          <div class="sub-quick" id="sub-quick-keywords">
+            <div class="sub-quick-label">常用关键词</div>
+            <div class="sub-quick-chips" id="sub-quick-kw-chips"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sub-footer">
+        <span id="sub-stats">—</span>
+        <button class="sub-clear-btn" id="sub-clear">
+          <i class="ri-delete-bin-line"></i> 清空全部
+        </button>
+      </div>`;
+
+    document.body.appendChild(panel);
+    renderSubPanel();
+
+    // 快速添加：从 config.rhai 高亮作者中取前10个
+    // （通过页面已高亮的作者反推）
+    const highlightedAuthors = [...new Set(
+      [...document.querySelectorAll('.highlight-author')]
+        .map(el => el.textContent.trim())
+        .filter(a => a.length > 3)
+    )].slice(0, 10);
+    const quickAuthorChips = document.getElementById('sub-quick-author-chips');
+    if (quickAuthorChips) {
+      highlightedAuthors.forEach(a => {
+        const chip = makeQuickChip(a, 'author');
+        quickAuthorChips.appendChild(chip);
+      });
+      if (!highlightedAuthors.length) {
+        quickAuthorChips.innerHTML = '<span style="font-size:.72rem;color:var(--c-text3)">（暂无数据）</span>';
+      }
+    }
+
+    // 快速关键词推荐
+    const quickKws = ['VLA','Humanoid','Gaussian Avatar','Diffusion','NeRF','Manipulation','Navigation','Sim-to-Real','Transformer','SMPL','Digital Human'];
+    const quickKwChips = document.getElementById('sub-quick-kw-chips');
+    if (quickKwChips) {
+      quickKws.forEach(k => {
+        const chip = makeQuickChip(k, 'keyword');
+        quickKwChips.appendChild(chip);
+      });
+    }
+
+    // 事件绑定
+    document.getElementById('sub-close')?.addEventListener('click', () => {
+      panel.classList.add('hidden');
+      document.getElementById('sub-btn')?.classList.remove('active');
+    });
+
+    document.getElementById('sub-clear')?.addEventListener('click', () => {
+      if (!confirm('确定清空所有订阅？')) return;
+      saveSubs({ authors: [], keywords: [] });
+      renderSubPanel();
+      applySubscriptions();
+    });
+
+    setupInput('sub-author-input', 'sub-author-add', 'author');
+    setupInput('sub-kw-input',     'sub-kw-add',     'keyword');
+  }
+
+  function makeQuickChip(text, type) {
+    const chip = document.createElement('button');
+    chip.className = 'sub-quick-chip';
+    chip.textContent = text;
+    chip.addEventListener('click', () => {
+      addSub(text, type);
+      chip.classList.add('added');
+      chip.disabled = true;
+    });
+    // 如果已订阅，初始化为已添加状态
+    const subs = loadSubs();
+    const list = type === 'author' ? subs.authors : subs.keywords;
+    if (list.some(x => x.toLowerCase() === text.toLowerCase())) {
+      chip.classList.add('added'); chip.disabled = true;
+    }
+    return chip;
+  }
+
+  function setupInput(inputId, btnId, type) {
+    const input = document.getElementById(inputId);
+    const btn   = document.getElementById(btnId);
+    const add   = () => {
+      const val = input?.value.trim();
+      if (!val) return;
+      addSub(val, type);
+      input.value = '';
+      input.focus();
+    };
+    btn?.addEventListener('click', add);
+    input?.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  }
+
+  function addSub(val, type) {
+    const subs = loadSubs();
+    const list = type === 'author' ? subs.authors : subs.keywords;
+    if (!list.some(x => x.toLowerCase() === val.toLowerCase())) {
+      list.push(val);
+      saveSubs(subs);
+    }
+    renderSubPanel();
+    applySubscriptions();
+  }
+
+  function removeSub(val, type) {
+    const subs = loadSubs();
+    if (type === 'author')  subs.authors  = subs.authors.filter(x => x !== val);
+    else                    subs.keywords = subs.keywords.filter(x => x !== val);
+    saveSubs(subs);
+    renderSubPanel();
+    applySubscriptions();
+  }
+
+  function renderSubPanel() {
+    const subs = loadSubs();
+
+    const renderTags = (containerId, items, type) => {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!items.length) {
+        el.innerHTML = `<span class="sub-empty-hint">暂无${type==='author'?'关注作者':'关注关键词'}</span>`;
+        return;
+      }
+      el.innerHTML = items.map(item => `
+        <span class="sub-tag">
+          ${item}
+          <button class="sub-tag-del" data-val="${item.replace(/"/g,'&quot;')}" data-type="${type}">×</button>
+        </span>`).join('');
+      el.querySelectorAll('.sub-tag-del').forEach(btn => {
+        btn.addEventListener('click', () => removeSub(btn.dataset.val, btn.dataset.type));
+      });
+    };
+
+    renderTags('sub-author-tags', subs.authors,  'author');
+    renderTags('sub-kw-tags',     subs.keywords, 'keyword');
+
+    const total = subs.authors.length + subs.keywords.length;
+    const statsEl = document.getElementById('sub-stats');
+    if (statsEl) statsEl.textContent = `${subs.authors.length} 位作者 · ${subs.keywords.length} 个关键词`;
+
+    // 同步快速添加按钮状态
+    document.querySelectorAll('.sub-quick-chip').forEach(chip => {
+      const text = chip.textContent;
+      const type = chip.closest('#sub-quick-author-chips') ? 'author' : 'keyword';
+      const list = type === 'author' ? subs.authors : subs.keywords;
+      const added = list.some(x => x.toLowerCase() === text.toLowerCase());
+      chip.classList.toggle('added', added);
+      chip.disabled = added;
+    });
+
+    // 更新 header 按钮角标
+    const badge = document.getElementById('sub-badge');
+    if (badge) {
+      badge.textContent = total;
+      badge.classList.toggle('hidden', total === 0);
+    }
+  }
+
+  // ── 注入订阅按钮到 header ──────────────────────────────────
+  function injectSubBtn() {
+    const actions = document.querySelector('.header-actions');
+    if (!actions || document.getElementById('sub-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'sub-btn';
+    btn.className = 'hbtn';
+    btn.title = '订阅关注';
+    btn.style.position = 'relative';
+    btn.innerHTML = `
+      <i class="ri-notification-2-line"></i>
+      <span id="sub-badge" class="badge hidden">0</span>`;
+
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      buildSubPanel();
+    });
+
+    // 插到推荐按钮后面
+    const recoBtn = document.getElementById('reco-btn');
+    if (recoBtn) recoBtn.after(btn);
+    else {
+      const navBtn = document.getElementById('nav-btn');
+      if (navBtn) actions.insertBefore(btn, navBtn);
+      else actions.prepend(btn);
+    }
+
+    // 初始化角标
+    const subs  = loadSubs();
+    const total = subs.authors.length + subs.keywords.length;
+    const badge = document.getElementById('sub-badge');
+    if (badge) { badge.textContent = total; badge.classList.toggle('hidden', total === 0); }
+  }
+
+  // ── 初始化 ───────────────────────────────────────────────────
+  injectSubBtn();
+  applySubscriptions();
+
+  // 过滤器变更后重新应用订阅高亮
+  const origFilter = window.filterPapers;
+  window.filterPapers = function() {
+    origFilter?.();
+    setTimeout(applySubscriptions, 10);
+  };
+
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 引用链追踪 — 读取 citations.json，在论文展开时显示引用关系
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let citationData = null;
+
+  async function loadCitations() {
+    if (citationData) return citationData;
+    try {
+      const r = await fetch('citations.json?t=' + Date.now());
+      if (!r.ok) return null;
+      citationData = await r.json();
+      return citationData;
+    } catch(e) { return null; }
+  }
+
+  function arxivUrl(arxivId) {
+    if (!arxivId) return null;
+    return `https://arxiv.org/abs/${arxivId}`;
+  }
+
+  function renderCitationSection(title, icon, items, emptyMsg) {
+    if (!items || !items.length) {
+      return `<div class="cite-section">
+        <div class="cite-section-title"><i class="${icon}"></i> ${title}</div>
+        <div class="cite-empty">${emptyMsg}</div>
+      </div>`;
+    }
+    const itemsHtml = items.map(item => {
+      const url     = item.arxivId ? arxivUrl(item.arxivId) : null;
+      const yearStr = item.year ? `<span class="cite-year">${item.year}</span>` : '';
+      const inner   = `
+        <div class="cite-item-title">${item.title || '(no title)'}</div>
+        <div class="cite-item-meta">
+          ${yearStr}
+          <span class="cite-item-authors">${item.authors || ''}</span>
+          ${item.arxivId ? `<span class="cite-arxiv-badge">arXiv</span>` : ''}
+        </div>`;
+      return url
+        ? `<a class="cite-item" href="${url}" target="_blank" rel="noopener">${inner}</a>`
+        : `<div class="cite-item cite-item--nolink">${inner}</div>`;
+    }).join('');
+
+    return `<div class="cite-section">
+      <div class="cite-section-title"><i class="${icon}"></i> ${title} <span class="cite-count">${items.length}</span></div>
+      <div class="cite-list">${itemsHtml}</div>
+    </div>`;
+  }
+
+  // 每篇论文展开时注入引用面板
+  document.querySelectorAll('.paper-item').forEach(item => {
+    const det = item.querySelector('details');
+    if (!det) return;
+    let loaded = false;
+
+    det.addEventListener('toggle', async () => {
+      if (!det.open || loaded) return;
+      loaded = true;
+
+      const rawId   = item.dataset.id || '';
+      const arxivId = rawId.replace(/.*abs\//, '').replace(/v\d+$/, '');
+      if (!arxivId) return;
+
+      const citations = await loadCitations();
+      if (!citations) return;
+
+      const data = citations[arxivId];
+      const paperBody = item.querySelector('.paper-body');
+      if (!paperBody) return;
+
+      // 在 paper-body 末尾注入引用面板
+      const panel = document.createElement('div');
+      panel.className = 'citations-panel';
+
+      if (!data) {
+        // 数据还未抓取
+        panel.innerHTML = `
+          <div class="cite-section-title">
+            <i class="ri-git-branch-line"></i> 引用关系
+            <span class="cite-pending">数据抓取中，请等待下次更新</span>
+          </div>`;
+      } else {
+        // 被引次数徽章
+        const citedBadge = data.citationCount > 0
+          ? `<span class="cite-total-badge" title="Semantic Scholar 总被引次数">
+               <i class="ri-bar-chart-box-line"></i> 被引 ${data.citationCount} 次
+             </span>`
+          : '';
+
+        panel.innerHTML = `
+          <div class="citations-header">
+            <span class="citations-title">
+              <i class="ri-git-branch-line"></i> 引用关系
+            </span>
+            ${citedBadge}
+          </div>
+          ${renderCitationSection(
+            '引用的论文', 'ri-arrow-right-up-line',
+            data.references,
+            '暂无引用数据（论文可能尚未被 Semantic Scholar 收录）'
+          )}
+          ${renderCitationSection(
+            '被引用', 'ri-arrow-left-down-line',
+            data.citations,
+            '暂无被引数据'
+          )}`;
+      }
+
+      // 如果已有 related-papers，插在它前面；否则直接 append
+      const relatedPapers = paperBody.querySelector('.related-papers');
+      if (relatedPapers) paperBody.insertBefore(panel, relatedPapers);
+      else paperBody.appendChild(panel);
+    });
+  });
+
+  // 在论文操作栏加被引次数角标（citations.json 加载后异步更新）
+  async function injectCitationBadges() {
+    const citations = await loadCitations();
+    if (!citations) return;
+
+    document.querySelectorAll('.paper-item').forEach(item => {
+      const rawId   = item.dataset.id || '';
+      const arxivId = rawId.replace(/.*abs\//, '').replace(/v\d+$/, '');
+      if (!arxivId) return;
+
+      const data = citations[arxivId];
+      if (!data || !data.citationCount) return;
+
+      // 在论文标题行右侧加被引次数小角标
+      const titleWrap = item.querySelector('.paper-title-wrap');
+      if (titleWrap && !titleWrap.querySelector('.cite-inline-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'cite-inline-badge';
+        badge.title = `Semantic Scholar 被引 ${data.citationCount} 次`;
+        badge.textContent = `★${data.citationCount}`;
+        // 插在 chevron 前
+        const chevron = item.querySelector('.paper-chevron');
+        if (chevron) chevron.before(badge);
+      }
+    });
+  }
+
+  // 延迟加载，不阻塞页面渲染
+  setTimeout(injectCitationBadges, 1500);
+
+})();

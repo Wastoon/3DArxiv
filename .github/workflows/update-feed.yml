@@ -103,6 +103,10 @@ jobs:
           UMAMI_API_TOKEN: ${{ secrets.UMAMI_API_TOKEN }}
         run: python scripts/generate_site_stats.py
 
+      # ── 12. Fetch citation graph (Semantic Scholar) ───
+      - name: Fetch Citations
+        run: python scripts/generate_citations.py
+
       # ── 10. Deploy to GitHub Pages ────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
