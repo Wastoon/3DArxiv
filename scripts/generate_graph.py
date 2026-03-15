@@ -152,9 +152,7 @@ def arxiv_search(query, max_results=8):
 def get_embedding(text):
     if not GEMINI_API_KEY: return None
     payload = json.dumps({
-        "model": "models/text-embedding-004",
         "content": {"parts": [{"text": text[:2000]}]},
-        "taskType": "SEMANTIC_SIMILARITY",
     }).encode("utf-8")
     url = f"{EMBED_API_URL}?key={GEMINI_API_KEY}"
     req = urllib.request.Request(url, data=payload,
