@@ -855,3 +855,576 @@ function handleDeepLink() {
 
 handleDeepLink();
 window.addEventListener('hashchange', handleDeepLink);
+
+// ═══════════════════════════════════════════════════════════════
+// ④ 移动端优化 — 已通过 CSS 处理，JS 侧补充 tag-bar 触摸滚动
+// ═══════════════════════════════════════════════════════════════
+// tag-bar 在移动端支持横向滑动（防止误触发纵向滚动）
+(function() {
+  const tagList = document.querySelector('.tag-list');
+  if (!tagList) return;
+  let startX = 0, startScrollLeft = 0, isDragging = false;
+  tagList.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startScrollLeft = tagList.scrollLeft;
+    isDragging = false;
+  }, { passive: true });
+  tagList.addEventListener('touchmove', e => {
+    const dx = startX - e.touches[0].clientX;
+    if (Math.abs(dx) > 5) isDragging = true;
+    tagList.scrollLeft = startScrollLeft + dx;
+  }, { passive: true });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// ⑤ 键盘快捷键增强
+// j/k  — 上下浏览论文（聚焦到下/上一篇）
+// o    — 在 ArXiv 打开当前聚焦论文
+// b    — 收藏/取消收藏当前聚焦论文
+// e    — 展开/折叠当前聚焦论文
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let focusedIdx = -1;
+
+  function getPapers() {
+    return [...document.querySelectorAll('.paper-item')]
+      .filter(p => p.style.display !== 'none');
+  }
+
+  function setFocus(idx) {
+    const papers = getPapers();
+    if (!papers.length) return;
+    idx = Math.max(0, Math.min(idx, papers.length - 1));
+
+    // 移除旧焦点
+    papers.forEach(p => p.classList.remove('kb-focused'));
+    focusedIdx = idx;
+    const el = papers[idx];
+    el.classList.add('kb-focused');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function getFocused() {
+    const papers = getPapers();
+    return focusedIdx >= 0 && focusedIdx < papers.length ? papers[focusedIdx] : null;
+  }
+
+  document.addEventListener('keydown', e => {
+    // 输入框内不触发
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    // 已被原有逻辑处理的键
+    if (e.key === 'Tab' || e.key === '/' || e.key === 'Escape') return;
+
+    const papers = getPapers();
+    if (!papers.length) return;
+
+    switch(e.key) {
+      case 'j':
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocus(focusedIdx < 0 ? 0 : focusedIdx + 1);
+        break;
+      case 'k':
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocus(focusedIdx <= 0 ? 0 : focusedIdx - 1);
+        break;
+      case 'o': {
+        e.preventDefault();
+        const el = getFocused();
+        if (!el) return;
+        const id = el.dataset.id;
+        if (id) window.open(id, '_blank', 'noopener');
+        break;
+      }
+      case 'b': {
+        e.preventDefault();
+        const el = getFocused();
+        if (!el) return;
+        el.querySelector('.bookmark-btn')?.click();
+        break;
+      }
+      case 'e':
+      case 'Enter': {
+        e.preventDefault();
+        const el = getFocused();
+        if (!el) return;
+        const det = el.querySelector('details');
+        if (det) det.open = !det.open;
+        break;
+      }
+    }
+  });
+
+  // 鼠标悬停时也更新焦点索引
+  document.addEventListener('mouseover', e => {
+    const paper = e.target.closest('.paper-item');
+    if (!paper) return;
+    const papers = getPapers();
+    const idx = papers.indexOf(paper);
+    if (idx >= 0) {
+      papers.forEach(p => p.classList.remove('kb-focused'));
+      focusedIdx = idx;
+    }
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// ⑥ 论文导出 — 批量导出当前可见论文为 CSV / BibTeX
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  // 在收藏面板底部加导出按钮，另外在 summary-bar 右侧加导出入口
+  const sbRight = document.querySelector('.sb-right');
+  if (sbRight) {
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'sb-export-btn';
+    exportBtn.title = '导出当前可见论文';
+    exportBtn.innerHTML = '<i class="ri-download-2-line"></i> 导出';
+    exportBtn.addEventListener('click', () => showExportModal());
+    sbRight.prepend(exportBtn);
+  }
+
+  function getVisiblePapers() {
+    return [...document.querySelectorAll('.paper-item')]
+      .filter(p => p.style.display !== 'none')
+      .map(p => ({
+        id:      p.dataset.id || '',
+        title:   p.dataset.title || '',
+        authors: p.dataset.authors || '',
+        comment: p.dataset.comment || '',
+        subject: p.closest('.subject-block')?.querySelector('.subject-name')?.textContent?.trim() || '',
+        abstract: p.querySelector('.paper-abstract')?.textContent?.trim() || '',
+      }));
+  }
+
+  function exportCSV(papers) {
+    const header = ['ArXiv ID','Title','Authors','Subject','Comment'];
+    const rows = papers.map(p => [
+      p.id, p.title, p.authors, p.subject, p.comment
+    ].map(v => `"${(v||'').replace(/"/g,'""')}"`).join(','));
+    const csv = [header.join(','), ...rows].join('\n');
+    download('3DArxiv-export.csv', csv, 'text/csv');
+  }
+
+  function exportBibTeX(papers) {
+    const entries = papers.map(p => {
+      const arxivId = (p.id || '').replace(/.*abs\//, '').replace(/[^0-9.]/g, '');
+      const year = arxivId ? '20' + arxivId.slice(0,2) : new Date().getFullYear();
+      const firstAuthor = (p.authors||'').split(',')[0].trim().split(' ').pop().toLowerCase().replace(/[^a-z]/g,'');
+      const firstWord = (p.title||'').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g,'');
+      const key = `${firstAuthor}${year}${firstWord}`;
+      const authorBib = (p.authors||'').split(',').map(a=>a.trim()).join(' and ');
+      return `@article{${key},\n  title   = {${p.title}},\n  author  = {${authorBib}},\n  journal = {arXiv preprint arXiv:${arxivId}},\n  year    = {${year}},\n  url     = {${p.id}}\n}`;
+    });
+    download('3DArxiv-export.bib', entries.join('\n\n'), 'text/plain');
+  }
+
+  function exportMarkdown(papers) {
+    const lines = papers.map(p =>
+      `- **[${p.title}](${p.id})**\n  ${p.authors}${p.comment ? `\n  *${p.comment}*` : ''}`
+    );
+    download('3DArxiv-export.md', lines.join('\n\n'), 'text/markdown');
+  }
+
+  function download(filename, content, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff'+content], { type }));
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  function showExportModal() {
+    const papers = getVisiblePapers();
+    const existing = document.getElementById('export-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'export-modal';
+    modal.className = 'export-modal-overlay';
+    modal.innerHTML = `
+      <div class="export-modal">
+        <div class="export-modal-hd">
+          <span><i class="ri-download-2-line"></i> 导出论文</span>
+          <button class="export-modal-close" id="export-close"><i class="ri-close-line"></i></button>
+        </div>
+        <div class="export-modal-body">
+          <div class="export-count">当前可见 <strong>${papers.length}</strong> 篇论文</div>
+          <div class="export-btns">
+            <button class="export-btn" id="exp-csv">
+              <i class="ri-file-excel-2-line"></i>
+              <span>CSV</span>
+              <small>Excel 可打开</small>
+            </button>
+            <button class="export-btn" id="exp-bib">
+              <i class="ri-double-quotes-l"></i>
+              <span>BibTeX</span>
+              <small>文献管理软件</small>
+            </button>
+            <button class="export-btn" id="exp-md">
+              <i class="ri-markdown-line"></i>
+              <span>Markdown</span>
+              <small>笔记软件</small>
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.getElementById('export-close').addEventListener('click', () => modal.remove());
+    document.getElementById('exp-csv').addEventListener('click', () => { exportCSV(papers); modal.remove(); });
+    document.getElementById('exp-bib').addEventListener('click', () => { exportBibTeX(papers); modal.remove(); });
+    document.getElementById('exp-md').addEventListener('click',  () => { exportMarkdown(papers); modal.remove(); });
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// ③ 论文关联推荐 — 基于 graph.json，在论文展开时显示相关论文
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let graphData = null;
+
+  async function loadGraph() {
+    if (graphData) return graphData;
+    try {
+      const r = await fetch('graph.json?t=' + Date.now());
+      if (!r.ok) return null;
+      graphData = await r.json();
+      return graphData;
+    } catch(e) { return null; }
+  }
+
+  function getRelated(paperId, graph, limit = 3) {
+    if (!graph?.edges) return [];
+    const nodeMap = new Map((graph.nodes||[]).map(n => [n.id, n]));
+
+    return graph.edges
+      .filter(e => {
+        if (e.type === 'author') return false; // 排除共同作者边，只保留语义相关
+        return e.source === paperId || e.target === paperId;
+      })
+      .map(e => {
+        const otherId = e.source === paperId ? e.target : e.source;
+        const node = nodeMap.get(otherId);
+        return node ? { node, type: e.type, weight: e.weight } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, limit);
+  }
+
+  // 监听每篇论文的展开事件
+  document.querySelectorAll('.paper-item').forEach(item => {
+    const det = item.querySelector('details');
+    if (!det) return;
+    let loaded = false;
+
+    det.addEventListener('toggle', async () => {
+      if (!det.open || loaded) return;
+      loaded = true;
+
+      const paperId = item.dataset.id || '';
+      if (!paperId) return;
+
+      const graph = await loadGraph();
+      if (!graph) return;
+
+      const related = getRelated(paperId, graph);
+      if (!related.length) return;
+
+      const paperBody = item.querySelector('.paper-body');
+      if (!paperBody) return;
+
+      const relDiv = document.createElement('div');
+      relDiv.className = 'related-papers';
+      relDiv.innerHTML = `
+        <div class="related-title"><i class="ri-links-line"></i> 相关论文</div>
+        ${related.map(({ node, type, weight }) => `
+          <a class="related-item" href="${node.id}" target="_blank" rel="noopener">
+            <div class="related-item-title">${node.title}</div>
+            <div class="related-item-meta">
+              <span class="related-type ${type}">${type === 'historical' ? '历史关联' : '语义相似'}</span>
+              <span class="related-score">${(weight * 100).toFixed(0)}%</span>
+              ${node.confName ? `<span class="related-conf">${node.confName}</span>` : ''}
+            </div>
+          </a>`).join('')}`;
+
+      // 插入到 paper-body 末尾
+      paperBody.appendChild(relDiv);
+    });
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// ① 论文图表预览 — 读取 figures.json，在摘要上方显示首图
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let figureData = null;
+
+  async function loadFigures() {
+    if (figureData) return figureData;
+    try {
+      const r = await fetch('figures.json?t=' + Date.now());
+      if (!r.ok) return null;
+      figureData = await r.json();
+      return figureData;
+    } catch(e) { return null; }
+  }
+
+  // 只在论文展开时懒加载图片
+  document.querySelectorAll('.paper-item').forEach(item => {
+    const det = item.querySelector('details');
+    if (!det) return;
+    let loaded = false;
+
+    det.addEventListener('toggle', async () => {
+      if (!det.open || loaded) return;
+      loaded = true;
+
+      const paperId = item.dataset.id || '';
+      if (!paperId) return;
+
+      const figures = await loadFigures();
+      if (!figures) return;
+
+      // figures.json key 用 arxiv ID（去掉版本号）
+      const arxivId = paperId.replace(/.*abs\//, '').replace(/v\d+$/, '');
+      const figUrl  = figures[arxivId] || figures[paperId];
+      if (!figUrl) return;
+
+      const paperBody = item.querySelector('.paper-body');
+      const abstract  = paperBody?.querySelector('.paper-abstract');
+      if (!abstract) return;
+
+      const fig = document.createElement('div');
+      fig.className = 'paper-figure';
+      fig.innerHTML = `
+        <img src="${figUrl}" alt="论文首图" loading="lazy"
+             onerror="this.closest('.paper-figure').remove()"/>`;
+      abstract.before(fig);
+    });
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// 访问统计 Dashboard — 读取 site_stats.json 展示 Umami 数据
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  let siteStats = null;
+  let statsTabInited = false;
+
+  // 在统计 Dashboard 里加"访问统计"Tab
+  function injectVisitorTab() {
+    const dash = document.getElementById('stats-dashboard');
+    if (!dash) return;
+
+    const inner = dash.querySelector('.stats-dashboard-inner');
+    if (!inner) return;
+
+    // 给现有内容加 Tab 结构
+    const sdHeader = inner.querySelector('.sd-header');
+    if (!sdHeader) return;
+
+    // 如果已经注入过就跳过
+    if (inner.querySelector('.sd-tabs')) return;
+
+    // 创建 Tab 导航
+    const tabNav = document.createElement('div');
+    tabNav.className = 'sd-tabs';
+    tabNav.innerHTML = `
+      <button class="sd-tab active" data-tab="papers">
+        <i class="ri-bar-chart-2-line"></i> 论文统计
+      </button>
+      <button class="sd-tab" data-tab="visitors">
+        <i class="ri-global-line"></i> 访问统计
+      </button>`;
+    sdHeader.after(tabNav);
+
+    // 把原有 KPI + 图表包裹进论文 Tab
+    const kpiRow    = inner.querySelector('.sd-kpi-row');
+    const sdCharts  = inner.querySelector('.sd-charts');
+    const papersTab = document.createElement('div');
+    papersTab.className = 'sd-tab-content';
+    papersTab.dataset.tab = 'papers';
+    if (kpiRow)   papersTab.appendChild(kpiRow);
+    if (sdCharts) papersTab.appendChild(sdCharts);
+    inner.appendChild(papersTab);
+
+    // 创建访问统计 Tab 内容
+    const visitorsTab = document.createElement('div');
+    visitorsTab.className = 'sd-tab-content hidden';
+    visitorsTab.dataset.tab = 'visitors';
+    visitorsTab.innerHTML = `
+      <div class="vs-kpi-row" id="vs-kpi-row">
+        <div class="kpi-card"><div class="kpi-val" id="vs-pv">—</div><div class="kpi-label">页面浏览</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-uv">—</div><div class="kpi-label">独立访客</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-vis">—</div><div class="kpi-label">访问次数</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="vs-time">—</div><div class="kpi-label">平均停留</div></div>
+      </div>
+      <div class="vs-charts">
+        <div class="chart-card chart-card--wide">
+          <div class="chart-card-title">每日访问趋势（近90天）</div>
+          <div class="chart-wrap"><canvas id="chart-daily-pv"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">访客国家分布</div>
+          <div id="vs-countries" class="vs-countries"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">流量来源</div>
+          <div id="vs-referrers" class="vs-referrers"></div>
+        </div>
+      </div>
+      <div class="vs-footer">
+        <span id="vs-generated">—</span>
+        <span>· 数据来自 <a href="https://umami.is" target="_blank" rel="noopener">Umami</a></span>
+      </div>`;
+    inner.appendChild(visitorsTab);
+
+    // Tab 切换逻辑
+    tabNav.addEventListener('click', e => {
+      const btn = e.target.closest('.sd-tab');
+      if (!btn) return;
+      const tab = btn.dataset.tab;
+      tabNav.querySelectorAll('.sd-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      inner.querySelectorAll('.sd-tab-content').forEach(c => c.classList.toggle('hidden', c.dataset.tab !== tab));
+      if (tab === 'visitors' && !statsTabInited) {
+        statsTabInited = true;
+        loadAndRenderStats();
+      }
+    });
+  }
+
+  async function loadAndRenderStats() {
+    const container = document.getElementById('vs-kpi-row');
+    if (container) {
+      container.innerHTML = `<div class="vs-loading"><i class="ri-loader-4-line vs-spin"></i> 加载中…</div>`;
+    }
+    try {
+      const r = await fetch('site_stats.json?t=' + Date.now());
+      if (!r.ok) throw new Error('site_stats.json not found');
+      siteStats = await r.json();
+      renderStats(siteStats);
+    } catch(e) {
+      if (container) {
+        container.innerHTML = `<div class="vs-empty">暂无访问数据<br><small>需配置 UMAMI_API_TOKEN 并等待 Actions 运行</small></div>`;
+      }
+    }
+  }
+
+  function fmt(n) {
+    if (n >= 10000) return (n/10000).toFixed(1) + '万';
+    if (n >= 1000)  return (n/1000).toFixed(1) + 'k';
+    return String(n || 0);
+  }
+
+  function fmtTime(ms) {
+    if (!ms) return '—';
+    const s = Math.round(ms / 1000);
+    if (s < 60)  return s + '秒';
+    const m = Math.floor(s / 60), rs = s % 60;
+    return `${m}分${rs}秒`;
+  }
+
+  function renderStats(data) {
+    const s = data.summary || {};
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    // KPI
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const kpiRow = document.getElementById('vs-kpi-row');
+    if (kpiRow) {
+      kpiRow.innerHTML = `
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.pageviews)}</div><div class="kpi-label">页面浏览</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.visitors)}</div><div class="kpi-label">独立访客</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmt(s.visits)}</div><div class="kpi-label">访问次数</div></div>
+        <div class="kpi-card"><div class="kpi-val">${fmtTime(s.visits > 0 ? Math.round(s.totaltime / s.visits) : 0)}</div><div class="kpi-label">平均停留</div></div>`;
+    }
+
+    // 每日趋势图
+    const dailyCtx = document.getElementById('chart-daily-pv');
+    if (dailyCtx && data.daily?.length) {
+      const gridColor = isDark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)';
+      const tickColor = isDark ? '#52525b' : '#a1a1aa';
+      const textColor = isDark ? '#a1a1aa' : '#52525b';
+      const existing  = Chart.getChart('chart-daily-pv');
+      if (existing) existing.destroy();
+      // 只显示最近 30 天
+      const recent = (data.daily || []).slice(-30);
+      new Chart(dailyCtx, {
+        type: 'line',
+        data: {
+          labels: recent.map(d => d.date.slice(5)),
+          datasets: [
+            { label: 'PV', data: recent.map(d => d.pageviews),
+              borderColor: isDark ? '#60a5fa':'#1d4ed8',
+              backgroundColor: isDark ? 'rgba(96,165,250,.1)':'rgba(29,78,216,.08)',
+              fill: true, tension: 0.3, pointRadius: 2, borderWidth: 1.5 },
+            { label: 'UV', data: recent.map(d => d.visitors),
+              borderColor: isDark ? '#34d399':'#059669',
+              backgroundColor: 'transparent',
+              tension: 0.3, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: textColor, boxWidth: 12, padding: 12 }}},
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: tickColor, maxRotation: 0, maxTicksLimit: 10 }},
+            y: { grid: { color: gridColor }, ticks: { color: tickColor }},
+          }
+        }
+      });
+    }
+
+    // 国家分布
+    const countriesEl = document.getElementById('vs-countries');
+    if (countriesEl && data.countries?.length) {
+      const max = data.countries[0]?.visitors || 1;
+      countriesEl.innerHTML = data.countries.slice(0, 12).map(c => `
+        <div class="vs-bar-row">
+          <span class="vs-bar-label">${c.name || c.country}</span>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill" style="width:${(c.visitors/max*100).toFixed(1)}%"></div>
+          </div>
+          <span class="vs-bar-val">${fmt(c.visitors)}</span>
+        </div>`).join('');
+    }
+
+    // 来源
+    const refEl = document.getElementById('vs-referrers');
+    if (refEl && data.referrers?.length) {
+      const maxR = data.referrers[0]?.count || 1;
+      refEl.innerHTML = data.referrers.slice(0, 8).map(r => `
+        <div class="vs-bar-row">
+          <span class="vs-bar-label">${r.name || '直接访问'}</span>
+          <div class="vs-bar-track">
+            <div class="vs-bar-fill vs-bar-fill--green" style="width:${(r.count/maxR*100).toFixed(1)}%"></div>
+          </div>
+          <span class="vs-bar-val">${fmt(r.count)}</span>
+        </div>`).join('');
+    }
+
+    // 生成时间
+    const genEl = document.getElementById('vs-generated');
+    if (genEl && data.generated) {
+      genEl.textContent = `数据更新于 ${data.generated.slice(0,10)}，统计近 ${data.range_days || 90} 天`;
+    }
+  }
+
+  // 在 stats dashboard 打开时注入 Tab
+  const statsBtn = document.getElementById('stats-btn');
+  const origStatsClick = statsBtn?.onclick;
+  statsBtn?.addEventListener('click', () => {
+    // 等 DOM 更新后注入
+    setTimeout(injectVisitorTab, 50);
+  });
+
+  // 主题切换时重渲染图表
+  document.querySelector('.theme-switch input')?.addEventListener('change', () => {
+    if (statsTabInited && siteStats) {
+      setTimeout(() => renderStats(siteStats), 60);
+    }
+  });
+})();

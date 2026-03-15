@@ -93,6 +93,16 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/generate_summary.py
 
+      # ── 10. Fetch paper figures (Semantic Scholar) ────
+      - name: Fetch Paper Figures
+        run: python scripts/generate_figures.py
+
+      # ── 11. Fetch Umami site stats ────────────────────
+      - name: Fetch Site Stats
+        env:
+          UMAMI_API_TOKEN: ${{ secrets.UMAMI_API_TOKEN }}
+        run: python scripts/generate_site_stats.py
+
       # ── 10. Deploy to GitHub Pages ────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

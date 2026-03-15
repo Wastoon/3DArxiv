@@ -271,6 +271,112 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 }
 #empty-state i{font-size:2.5rem;color:var(--text3);margin-bottom:12px;display:block}
 #empty-state p{font-size:.85rem;color:var(--text3)}
+
+/* ── Timeline Slider ─────────────────────────────────── */
+#timeline-bar {
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  background:rgba(8,9,13,.92);
+  border-top:1px solid var(--border);
+  backdrop-filter:blur(16px);
+  padding:10px 20px 12px;
+  display:flex;flex-direction:column;gap:6px;
+  transition:transform .25s ease;
+}
+#timeline-bar.hidden{transform:translateY(100%)}
+
+.tl-header{
+  display:flex;align-items:center;justify-content:space-between;
+}
+.tl-title{
+  font-size:.65rem;font-family:var(--mono);color:var(--text3);
+  text-transform:uppercase;letter-spacing:.08em;
+  display:flex;align-items:center;gap:6px;
+}
+.tl-range-label{
+  font-size:.72rem;font-family:var(--mono);color:var(--text2);
+  display:flex;align-items:center;gap:8px;
+}
+.tl-range-label span{
+  color:var(--accent);font-weight:500;
+}
+.tl-close{
+  background:none;border:none;color:var(--text3);
+  cursor:pointer;font-size:.9rem;padding:2px;
+  transition:color .15s;
+}
+.tl-close:hover{color:var(--text)}
+
+.tl-track{position:relative;height:32px;display:flex;align-items:center;}
+
+/* date tick marks */
+.tl-ticks{
+  position:absolute;top:0;left:0;right:0;height:100%;
+  display:flex;align-items:flex-end;pointer-events:none;
+}
+.tl-tick{
+  position:absolute;bottom:0;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.tl-tick-line{width:1px;height:6px;background:var(--border2);}
+.tl-tick-label{
+  font-size:.6rem;font-family:var(--mono);color:var(--text3);
+  white-space:nowrap;transform:translateX(-50%);
+}
+
+/* dual range slider */
+.tl-slider-wrap{
+  position:relative;width:100%;height:32px;
+  display:flex;align-items:center;
+}
+.tl-range{
+  position:absolute;width:100%;
+  -webkit-appearance:none;appearance:none;
+  height:3px;background:transparent;outline:none;cursor:pointer;
+  pointer-events:none;
+}
+.tl-range::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg);
+  cursor:pointer;pointer-events:all;
+  box-shadow:0 0 0 2px var(--accent);
+  transition:box-shadow .15s;
+}
+.tl-range::-webkit-slider-thumb:hover{box-shadow:0 0 0 4px rgba(79,142,247,.3)}
+.tl-range::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--bg);
+  cursor:pointer;pointer-events:all;
+}
+.tl-track-fill{
+  position:absolute;height:3px;
+  background:var(--accent);border-radius:2px;
+  pointer-events:none;
+}
+.tl-track-bg{
+  position:absolute;left:0;right:0;height:3px;
+  background:var(--border2);border-radius:2px;
+  pointer-events:none;
+}
+
+/* node count badge on timeline */
+.tl-count{
+  font-size:.65rem;font-family:var(--mono);color:var(--text3);
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:4px;padding:1px 6px;
+}
+
+/* timeline toggle button (in topbar) */
+#btn-timeline{
+  height:30px;padding:0 10px;
+  background:var(--surface2);border:1px solid var(--border2);border-radius:5px;
+  color:var(--text2);font-size:.75rem;font-family:var(--mono);cursor:pointer;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+  transition:all .15s;
+}
+#btn-timeline:hover{border-color:var(--accent);color:var(--accent)}
+#btn-timeline.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
 </style>
 <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
 </head>
@@ -296,6 +402,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
     <button id="search-clear"><i class="ri-close-line"></i></button>
   </div>
   <div class="tb-right">
+    <button id="btn-timeline" title="时间轴过滤"><i class="ri-time-line"></i> 时间轴</button>
     <button class="tb-btn" id="btn-reset" title="重置视角"><i class="ri-focus-3-line"></i> 复位</button>
     <button class="tb-btn" id="btn-highlight" title="高亮精选"><i class="ri-star-line"></i> 精选</button>
     <a class="tb-back" href="index.html"><i class="ri-arrow-left-line"></i> 返回列表</a>
@@ -1007,10 +1114,18 @@ function buildTagFilters() {
 
 // ── Visibility ───────────────────────────────────────────
 function applyVisibility() {
+  const dateFrom = tlActive && timelineDates.length ? timelineDates[tlStartIdx] : null;
+  const dateTo   = tlActive && timelineDates.length ? timelineDates[tlEndIdx]   : null;
+
   visibleNodeIds = new Set(
     nodes
       .filter(n => {
         if (activeTag && !(n.tags||[]).includes(activeTag)) return false;
+        // 时间轴过滤：历史节点（nodeType==='historical'）始终显示
+        if (tlActive && dateFrom && dateTo && n.nodeType !== 'historical') {
+          const d = (n.date || '').slice(0,10);
+          if (d && (d < dateFrom || d > dateTo)) return false;
+        }
         return true;
       })
       .map(n=>n.id)
@@ -1045,6 +1160,137 @@ document.addEventListener('keydown', e => {
   }
 });
 
+
+
+// ── Timeline ─────────────────────────────────────────────
+let timelineDates = [];   // 所有日期的有序数组（去重排序）
+let tlStartIdx = 0;
+let tlEndIdx   = 0;
+let tlActive   = false;
+
+function buildTimeline() {
+  // 收集所有节点的日期，去重排序
+  const dateSet = new Set();
+  allNodes.forEach(n => { if (n.date) dateSet.add(n.date.slice(0,10)); });
+  timelineDates = [...dateSet].sort();
+  if (!timelineDates.length) return;
+
+  tlStartIdx = 0;
+  tlEndIdx   = timelineDates.length - 1;
+
+  const startSlider = document.getElementById('tl-start');
+  const endSlider   = document.getElementById('tl-end');
+  if (!startSlider || !endSlider) return;
+
+  startSlider.max = timelineDates.length - 1;
+  endSlider.max   = timelineDates.length - 1;
+  startSlider.value = 0;
+  endSlider.value   = timelineDates.length - 1;
+
+  buildTicks();
+  updateTimelineLabels();
+}
+
+function buildTicks() {
+  const container = document.getElementById('tl-ticks');
+  if (!container || !timelineDates.length) return;
+  container.innerHTML = '';
+
+  // 最多显示 10 个刻度
+  const n = timelineDates.length;
+  const step = Math.max(1, Math.floor(n / 10));
+  const indices = [];
+  for (let i = 0; i < n; i += step) indices.push(i);
+  if (indices[indices.length-1] !== n-1) indices.push(n-1);
+
+  indices.forEach(i => {
+    const pct = n <= 1 ? 50 : (i / (n-1)) * 100;
+    const tick = document.createElement('div');
+    tick.className = 'tl-tick';
+    tick.style.left = pct + '%';
+    const date = timelineDates[i];
+    // 只显示月-日
+    const label = date ? date.slice(5) : '';
+    tick.innerHTML = `<div class="tl-tick-line"></div><div class="tl-tick-label">${label}</div>`;
+    container.appendChild(tick);
+  });
+}
+
+function updateTimelineLabels() {
+  const s = timelineDates[tlStartIdx] || '—';
+  const e = timelineDates[tlEndIdx]   || '—';
+  const sl = document.getElementById('tl-start-label');
+  const el = document.getElementById('tl-end-label');
+  if (sl) sl.textContent = s.slice(5);
+  if (el) el.textContent = e.slice(5);
+
+  // 更新滑块填充颜色
+  const fill = document.getElementById('tl-fill');
+  const n = timelineDates.length - 1;
+  if (fill && n > 0) {
+    const leftPct  = (tlStartIdx / n) * 100;
+    const rightPct = (tlEndIdx   / n) * 100;
+    fill.style.left  = leftPct + '%';
+    fill.style.width = (rightPct - leftPct) + '%';
+  }
+
+  applyVisibility();
+  // 更新可见节点数
+  const cnt = document.getElementById('tl-count');
+  if (cnt) cnt.textContent = visibleNodeIds.size + ' 篇';
+  draw();
+}
+
+// 双滑块联动
+const tlStartSlider = document.getElementById('tl-start');
+const tlEndSlider   = document.getElementById('tl-end');
+
+tlStartSlider?.addEventListener('input', () => {
+  tlStartIdx = parseInt(tlStartSlider.value);
+  if (tlStartIdx > tlEndIdx) {
+    tlEndIdx = tlStartIdx;
+    tlEndSlider.value = tlEndIdx;
+  }
+  updateTimelineLabels();
+});
+
+tlEndSlider?.addEventListener('input', () => {
+  tlEndIdx = parseInt(tlEndSlider.value);
+  if (tlEndIdx < tlStartIdx) {
+    tlStartIdx = tlEndIdx;
+    tlStartSlider.value = tlStartIdx;
+  }
+  updateTimelineLabels();
+});
+
+// 时间轴开关按钮
+document.getElementById('btn-timeline')?.addEventListener('click', function() {
+  tlActive = !tlActive;
+  this.classList.toggle('active', tlActive);
+  const bar = document.getElementById('timeline-bar');
+  if (tlActive) {
+    bar?.classList.remove('hidden');
+    buildTimeline();
+  } else {
+    bar?.classList.add('hidden');
+    // 关闭时恢复显示全部
+    tlStartIdx = 0;
+    tlEndIdx   = Math.max(0, timelineDates.length - 1);
+    applyVisibility();
+    draw();
+  }
+});
+
+document.getElementById('tl-close')?.addEventListener('click', () => {
+  tlActive = false;
+  document.getElementById('btn-timeline')?.classList.remove('active');
+  document.getElementById('timeline-bar')?.classList.add('hidden');
+  tlStartIdx = 0;
+  tlEndIdx   = Math.max(0, timelineDates.length - 1);
+  applyVisibility();
+  draw();
+});
+
 // ── Boot ─────────────────────────────────────────────────
 canvas.style.cursor = 'grab';
 loadGraph().catch(err => {
@@ -1052,5 +1298,27 @@ loadGraph().catch(err => {
   console.error(err);
 });
 </script>
+
+<!-- Timeline Bar -->
+<div id="timeline-bar" class="hidden">
+  <div class="tl-header">
+    <div class="tl-title"><i class="ri-time-line"></i> 时间轴</div>
+    <div class="tl-range-label">
+      <span id="tl-start-label">—</span>
+      <span style="color:var(--text3)">→</span>
+      <span id="tl-end-label">—</span>
+      <span class="tl-count" id="tl-count">— 篇</span>
+    </div>
+    <button class="tl-close" id="tl-close"><i class="ri-close-line"></i></button>
+  </div>
+  <div class="tl-slider-wrap">
+    <div class="tl-track-bg"></div>
+    <div class="tl-track-fill" id="tl-fill"></div>
+    <input type="range" class="tl-range" id="tl-start" min="0" max="100" value="0" step="1">
+    <input type="range" class="tl-range" id="tl-end"   min="0" max="100" value="100" step="1">
+  </div>
+  <div class="tl-ticks" id="tl-ticks"></div>
+</div>
+
 </body>
 </html>
