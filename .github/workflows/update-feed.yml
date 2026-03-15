@@ -67,7 +67,15 @@ jobs:
       - name: Generate Graph Data
         run: python scripts/generate_graph.py
 
-      # ── 7. Deploy to GitHub Pages ─────────────────────
+      # ── 7. Generate AI Summaries (TL;DR) ─────────────
+      # 增量生成，每次最多处理 80 篇新论文
+      # 若未配置 GEMINI_API_KEY 则自动跳过，不影响其他步骤
+      - name: Generate AI Summaries
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/generate_summary.py
+
+      # ── 8. Deploy to GitHub Pages ─────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -75,9 +83,8 @@ jobs:
           publish_dir: ./target
           force_orphan: true
 
-      # ── 8. Telegram notification ──────────────────────
-      # 只在每日定时触发时推送，手动/push 触发时跳过
-      # 若需要每次都推送，删除下方 if 行即可
+      # ── 9. Telegram notification ──────────────────────
+      # 只在每日定时触发时推送
       - name: Notify Telegram
         if: github.event_name == 'schedule'
         env:
