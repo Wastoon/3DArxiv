@@ -93,6 +93,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/generate_summary.py
 
+      # ── 10. Fetch paper figures (Semantic Scholar) ────
+      - name: Fetch Paper Figures
+        run: python scripts/generate_figures.py
+
       # ── 10. Deploy to GitHub Pages ────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
