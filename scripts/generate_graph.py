@@ -26,25 +26,31 @@ EMBED_API_URL        = "https://generativelanguage.googleapis.com/v1beta/models/
 
 MAX_NEW_PER_RUN      = 30
 ARXIV_SEARCH_RESULTS = 8
-SIMILARITY_THRESHOLD = 0.72
-NEW_SIM_THRESH       = 0.78
+SIMILARITY_THRESHOLD = 0.60
+NEW_SIM_THRESH       = 0.65
 MAX_HIST_PER_NEW     = 4
 MAX_TOTAL_NODES      = 1500
 ARXIV_INTERVAL       = 3.5
 EMBED_INTERVAL       = 0.12
 
 TAG_RULES = [
-    ("VLA",          ["vision-language-action","vla"]),
-    ("Humanoid",     ["humanoid","bipedal","whole-body","loco-manipulation"]),
-    ("Manipulation", ["manipulation","dexterous","grasping","in-hand"]),
-    ("Navigation",   ["navigation","path planning","obstacle avoidance","autonomous driving"]),
-    ("NeRF/3DGS",    ["nerf","neural radiance","3d gaussian","gaussian splatting"]),
-    ("Diffusion",    ["diffusion model","diffusion policy","denoising"]),
-    ("Sim-to-Real",  ["sim-to-real","sim2real","domain randomization"]),
-    ("RL",           ["reinforcement learning","policy gradient","ppo","sac"]),
-    ("Transformer",  ["transformer","attention mechanism","vision transformer"]),
-    ("Dataset",      ["dataset","benchmark","annotation"]),
-    ("Survey",       ["survey","review","overview","taxonomy"]),
+    ("VLA",            ["vision-language-action","vla"]),
+    ("Humanoid",       ["humanoid","bipedal","whole-body","loco-manipulation"]),
+    ("Manipulation",   ["manipulation","dexterous","grasping","in-hand"]),
+    ("Navigation",     ["navigation","path planning","obstacle avoidance","autonomous driving"]),
+    ("NeRF/3DGS",      ["nerf","neural radiance","3d gaussian","gaussian splatting"]),
+    ("Digital Human",  ["digital human","human avatar","human reconstruction","human rendering",
+                         "clothed human","free-viewpoint human","relightable human"]),
+    ("Gaussian Avatar",["gaussian avatar","avatar gaussian","animatable gaussian",
+                         "deformable gaussian","4d gaussian","dynamic gaussian","smpl"]),
+    ("Human Body",     ["human body","body reconstruction","parametric human",
+                         "human pose","body model","pose estimation"]),
+    ("Diffusion",      ["diffusion model","diffusion policy","denoising"]),
+    ("Sim-to-Real",    ["sim-to-real","sim2real","domain randomization"]),
+    ("RL",             ["reinforcement learning","policy gradient","ppo","sac"]),
+    ("Transformer",    ["transformer","attention mechanism","vision transformer"]),
+    ("Dataset",        ["dataset","benchmark","annotation"]),
+    ("Survey",         ["survey","review","overview","taxonomy"]),
 ]
 CONF_PAT = re.compile(
     r'\b(CVPR|ICCV|ECCV|NeurIPS|ICLR|ICML|ICRA|IROS|RSS|CoRL|AAAI|IJCAI|3DV|RA-L|RAL|WACV)\b',
@@ -111,6 +117,7 @@ def build_query(paper):
     return " ".join(words[:4]) or title[:50]
 
 def arxiv_search(query, max_results=8):
+    print(f"  [ArXiv] querying: {query[:50]}", flush=True)
     params = urllib.parse.urlencode({
         "search_query": f"ti:{query} AND cat:cs.*",
         "start": 0, "max_results": max_results,
@@ -150,6 +157,7 @@ def arxiv_search(query, max_results=8):
 
 # ── Gemini Embedding ──────────────────────────────────────
 def get_embedding(text):
+    print(f"  [Embed] calling API...", flush=True)
     if not GEMINI_API_KEY: return None
     payload = json.dumps({
         "content": {"parts": [{"text": text[:2000]}]},
@@ -211,6 +219,11 @@ def cosine_sp(a,b):
 
 # ── 主流程 ────────────────────────────────────────────────
 def main():
+    print("[Graph] Script started", flush=True)
+    print(f"[Graph] GEMINI_API_KEY set: {bool(GEMINI_API_KEY)}", flush=True)
+    print(f"[Graph] CACHE_PATH exists: {CACHE_PATH.exists()}", flush=True)
+    print(f"[Graph] EMBED_PATH exists: {EMBED_PATH.exists()}", flush=True)
+
     if not CACHE_PATH.exists():
         print("[Graph] cache.json not found", file=sys.stderr); sys.exit(0)
 
@@ -218,9 +231,9 @@ def main():
     emb_cache  = load_json(EMBED_PATH, {})
     new_papers = collect_new_papers(cache)
 
-    print(f"[Graph] New papers: {len(new_papers)}")
-    print(f"[Graph] Embedding cache: {len(emb_cache)} entries")
-    print(f"[Graph] Mode: {'Gemini Embedding' if GEMINI_API_KEY else 'TF-IDF'}")
+    print(f"[Graph] New papers: {len(new_papers)}", flush=True)
+    print(f"[Graph] Embedding cache: {len(emb_cache)} entries", flush=True)
+    print(f"[Graph] Mode: {'Gemini Embedding' if GEMINI_API_KEY else 'TF-IDF'}", flush=True)
 
     uncached = [p for p in new_papers if p["id"] not in emb_cache]
     to_proc  = uncached[:MAX_NEW_PER_RUN]
@@ -343,10 +356,19 @@ def main():
         if hid not in emb_cache and hid in historical_papers:
             h = historical_papers[hid]
             emb_cache[hid] = {"vec":vec,"title":h["title"],"date":h.get("date","")}
+    # 压缩向量：保留4位小数，大幅减小文件体积（精度损失<0.01%）
+    compressed = {}
+    for pid, entry in emb_cache.items():
+        compressed[pid] = {
+            "vec":   [round(v, 4) for v in entry["vec"]],
+            "title": entry["title"],
+            "date":  entry["date"],
+        }
     EMBED_PATH.parent.mkdir(exist_ok=True)
-    EMBED_PATH.write_text(json.dumps(emb_cache, ensure_ascii=False, separators=(",",":")),
+    EMBED_PATH.write_text(json.dumps(compressed, ensure_ascii=False, separators=(",",":")),
                            encoding="utf-8")
-    print(f"[Graph] Saved {len(emb_cache)} embeddings → {EMBED_PATH} "
+    emb_cache = compressed  # 更新内存中的缓存
+    print(f"[Graph] Saved {len(compressed)} embeddings → {EMBED_PATH} "
           f"({EMBED_PATH.stat().st_size//1024} KB)")
 
     edge_types = defaultdict(int)
