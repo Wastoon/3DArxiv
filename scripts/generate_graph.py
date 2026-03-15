@@ -22,7 +22,7 @@ EMBED_PATH   = Path("./data/embeddings.json")
 OUTPUT_PATH  = Path("./target/graph.json")
 
 GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "")
-EMBED_API_URL        = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+EMBED_API_URL        = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
 
 MAX_NEW_PER_RUN      = 30
 ARXIV_SEARCH_RESULTS = 8
@@ -154,9 +154,10 @@ def get_embedding(text):
     payload = json.dumps({
         "content": {"parts": [{"text": text[:2000]}]},
     }).encode("utf-8")
-    url = f"{EMBED_API_URL}?key={GEMINI_API_KEY}"
+    url = EMBED_API_URL
     req = urllib.request.Request(url, data=payload,
-                                  headers={"Content-Type":"application/json"}, method="POST")
+        headers={"Content-Type":"application/json","x-goog-api-key":GEMINI_API_KEY},
+        method="POST")
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             res = json.loads(r.read())
