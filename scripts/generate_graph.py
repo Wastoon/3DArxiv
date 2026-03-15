@@ -26,8 +26,8 @@ EMBED_API_URL        = "https://generativelanguage.googleapis.com/v1beta/models/
 
 MAX_NEW_PER_RUN      = 30
 ARXIV_SEARCH_RESULTS = 8
-SIMILARITY_THRESHOLD = 0.72
-NEW_SIM_THRESH       = 0.78
+SIMILARITY_THRESHOLD = 0.60
+NEW_SIM_THRESH       = 0.65
 MAX_HIST_PER_NEW     = 4
 MAX_TOTAL_NODES      = 1500
 ARXIV_INTERVAL       = 3.5
@@ -350,10 +350,19 @@ def main():
         if hid not in emb_cache and hid in historical_papers:
             h = historical_papers[hid]
             emb_cache[hid] = {"vec":vec,"title":h["title"],"date":h.get("date","")}
+    # 压缩向量：保留4位小数，大幅减小文件体积（精度损失<0.01%）
+    compressed = {}
+    for pid, entry in emb_cache.items():
+        compressed[pid] = {
+            "vec":   [round(v, 4) for v in entry["vec"]],
+            "title": entry["title"],
+            "date":  entry["date"],
+        }
     EMBED_PATH.parent.mkdir(exist_ok=True)
-    EMBED_PATH.write_text(json.dumps(emb_cache, ensure_ascii=False, separators=(",",":")),
+    EMBED_PATH.write_text(json.dumps(compressed, ensure_ascii=False, separators=(",",":")),
                            encoding="utf-8")
-    print(f"[Graph] Saved {len(emb_cache)} embeddings → {EMBED_PATH} "
+    emb_cache = compressed  # 更新内存中的缓存
+    print(f"[Graph] Saved {len(compressed)} embeddings → {EMBED_PATH} "
           f"({EMBED_PATH.stat().st_size//1024} KB)")
 
     edge_types = defaultdict(int)
