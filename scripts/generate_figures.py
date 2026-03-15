@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 CACHE_PATH   = Path("./target/cache.json")
 FIGURES_PATH = Path("./target/figures.json")
 
-MAX_NEW_PER_RUN  = 80     # 每次最多处理 N 篇新论文
-REQUEST_INTERVAL = 0.15   # 请求间隔（秒），10 req/s 以内
+MAX_NEW_PER_RUN  = 40     # 每次最多处理 N 篇新论文
+REQUEST_INTERVAL = 1.2   # 请求间隔（秒），10 req/s 以内
 S2_API_BASE      = "https://api.semanticscholar.org/graph/v1/paper/ARXIV:"
 S2_FIELDS        = "openAccessPdf,tldr,figures"
 
@@ -82,11 +82,11 @@ def fetch_figure(arxiv_id):
             return None
 
     except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None  # 论文不在 S2 数据库，正常情况
+        if e.code in (404, 400):
+            return None  # 论文未收录或参数错误，正常情况
         if e.code == 429:
-            print(f"  [Figures] Rate limited, waiting 5s...", file=sys.stderr)
-            time.sleep(5)
+            print(f"  [Figures] Rate limited, waiting 30s...", file=sys.stderr)
+            time.sleep(30)
             return None
         print(f"  [Figures] HTTP {e.code} for {arxiv_id}", file=sys.stderr)
         return None
