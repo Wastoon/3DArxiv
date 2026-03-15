@@ -542,3 +542,254 @@ document.querySelectorAll('.ai-summary-btn').forEach(btn => {
     btn.closest('.paper-actions').after(aiPanel);
   });
 });
+
+// ═══════════════════════════════════════════
+// ─── 1. Sub-topic Tag Filter ───────────────
+// ═══════════════════════════════════════════
+
+const TAG_RULES = [
+  { tag: 'VLA',         keywords: ['vision-language-action','vla','vision language action'] },
+  { tag: 'Humanoid',    keywords: ['humanoid','bipedal','whole-body','loco-manipulation'] },
+  { tag: 'Manipulation',keywords: ['manipulation','dexterous','grasping','grasp','in-hand'] },
+  { tag: 'Navigation',  keywords: ['navigation','path planning','obstacle avoidance','autonomous driving','self-driving'] },
+  { tag: 'NeRF / 3DGS', keywords: ['nerf','neural radiance','3d gaussian','gaussian splatting','implicit surface'] },
+  { tag: 'Diffusion',   keywords: ['diffusion model','diffusion policy','score matching','denoising'] },
+  { tag: 'Sim-to-Real', keywords: ['sim-to-real','sim2real','simulation to real','domain randomization','domain adaptation'] },
+  { tag: 'RL',          keywords: ['reinforcement learning','policy gradient','ppo','sac','rl agent','reward shaping'] },
+  { tag: 'Transformer', keywords: ['transformer','attention mechanism','self-attention','cross-attention','vision transformer','vit'] },
+  { tag: 'Dataset',     keywords: ['dataset','benchmark','data collection','annotation','ground truth'] },
+  { tag: 'Survey',      keywords: ['survey','review','overview','taxonomy'] },
+];
+
+// Assign tags to each paper based on title + abstract keywords
+document.querySelectorAll('.paper-item').forEach(item => {
+  const text = (item.dataset.search || '').toLowerCase();
+  const tags = TAG_RULES.filter(r => r.keywords.some(kw => text.includes(kw))).map(r => r.tag);
+  item.dataset.tags = tags.join(',');
+});
+
+// Build tag bar UI
+const tagBar = document.createElement('div');
+tagBar.id = 'tag-bar';
+tagBar.className = 'tag-bar';
+
+// Count papers per tag
+const tagCounts = {};
+TAG_RULES.forEach(r => { tagCounts[r.tag] = 0; });
+document.querySelectorAll('.paper-item').forEach(item => {
+  (item.dataset.tags || '').split(',').filter(Boolean).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+});
+
+// Only show tags with at least 1 paper
+const activeTags = TAG_RULES.filter(r => tagCounts[r.tag] > 0);
+
+tagBar.innerHTML = `
+  <div class="tag-bar-inner">
+    <span class="tag-bar-label">子方向</span>
+    <div class="tag-list" id="tag-list">
+      <button class="tag-chip tag-chip--all active" data-tag="">全部</button>
+      ${activeTags.map(r =>
+        `<button class="tag-chip" data-tag="${r.tag}">${r.tag} <span class="tag-count">${tagCounts[r.tag]}</span></button>`
+      ).join('')}
+    </div>
+  </div>`;
+
+// Insert tag bar after summary bar
+const summaryBar = document.querySelector('.summary-bar');
+summaryBar?.after(tagBar);
+
+// Tag filter state (multi-select)
+const selectedTags = new Set();
+
+function applyTagFilter() {
+  document.querySelectorAll('.paper-item').forEach(item => {
+    if (!selectedTags.size) {
+      item.dataset.tagHidden = '';
+      return;
+    }
+    const itemTags = (item.dataset.tags || '').split(',');
+    const match = [...selectedTags].some(t => itemTags.includes(t));
+    item.dataset.tagHidden = match ? '' : '1';
+  });
+  filterPapers(); // re-run existing filter to merge both conditions
+}
+
+// Patch existing filterPapers to also respect tag filter
+const _origFilter = filterPapers;
+// Override filterPapers to incorporate tag filtering
+window.filterPapers = function() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+  document.querySelectorAll('.paper-item').forEach(item => {
+    const searchText = item.dataset.search || '';
+    const hasStar    = item.dataset.hasStar === '1';
+    const hasConf    = item.dataset.conference === '1';
+    const matchQ  = !q || searchText.includes(q);
+    const matchF  = !featuredOnly || hasStar || hasConf;
+    const matchT  = !selectedTags.size || [...selectedTags].some(t => (item.dataset.tags||'').split(',').includes(t));
+    item.style.display = (matchQ && matchF && matchT) ? '' : 'none';
+  });
+  document.querySelectorAll('.subject-block').forEach(sb => {
+    const hasVisible = [...sb.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
+    sb.style.display = hasVisible ? '' : 'none';
+  });
+  document.querySelectorAll('.day-section').forEach(d => {
+    const hasVisible = [...d.querySelectorAll('.paper-item')].some(p => p.style.display !== 'none');
+    d.style.display = hasVisible ? '' : 'none';
+  });
+};
+
+document.getElementById('tag-list')?.addEventListener('click', e => {
+  const chip = e.target.closest('.tag-chip');
+  if (!chip) return;
+  const tag = chip.dataset.tag;
+
+  if (tag === '') {
+    // "全部" resets all
+    selectedTags.clear();
+    document.querySelectorAll('.tag-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+  } else {
+    document.querySelector('.tag-chip--all')?.classList.remove('active');
+    if (selectedTags.has(tag)) {
+      selectedTags.delete(tag);
+      chip.classList.remove('active');
+    } else {
+      selectedTags.add(tag);
+      chip.classList.add('active');
+    }
+    if (selectedTags.size === 0) {
+      document.querySelector('.tag-chip--all')?.classList.add('active');
+    }
+  }
+  filterPapers();
+});
+
+
+// ═══════════════════════════════════════════
+// ─── 2. BibTeX One-click Copy ──────────────
+// ═══════════════════════════════════════════
+
+function buildBibTeX(title, authors, id) {
+  // Extract arxiv ID from URL like https://arxiv.org/abs/2501.12345
+  const arxivId = (id || '').replace(/.*abs\//, '').replace(/[^0-9.]/g, '');
+  // Generate citekey: firstAuthorLastName + year + firstTitleWord
+  const firstAuthor = (authors || '').split(',')[0].trim().split(' ').pop().toLowerCase().replace(/[^a-z]/g, '');
+  const year = arxivId ? '20' + arxivId.slice(0, 2) : new Date().getFullYear();
+  const firstWord = (title || '').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '');
+  const citekey = `${firstAuthor}${year}${firstWord}`;
+
+  const authorBib = (authors || '').split(',').map(a => a.trim()).join(' and ');
+
+  return `@article{${citekey},
+  title   = {${title}},
+  author  = {${authorBib}},
+  journal = {arXiv preprint arXiv:${arxivId}},
+  year    = {${year}},
+  url     = {${id}}
+}`;
+}
+
+// Add BibTeX button to every paper's action row
+document.querySelectorAll('.paper-item').forEach(item => {
+  const actions = item.querySelector('.paper-actions');
+  if (!actions) return;
+  const title   = item.dataset.title   || '';
+  const authors = item.dataset.authors || '';
+  const id      = item.dataset.id      || '';
+
+  const btn = document.createElement('button');
+  btn.className = 'paction paction--bib bibtex-btn';
+  btn.title = '复制 BibTeX 引用';
+  btn.innerHTML = '<i class="ri-double-quotes-l"></i> BibTeX';
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const bib = buildBibTeX(title, authors, id);
+    navigator.clipboard.writeText(bib).then(() => {
+      btn.innerHTML = '<i class="ri-check-line"></i> 已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="ri-double-quotes-l"></i> BibTeX';
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(() => {
+      // Fallback for non-secure contexts
+      const ta = document.createElement('textarea');
+      ta.value = bib; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.innerHTML = '<i class="ri-check-line"></i> 已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="ri-double-quotes-l"></i> BibTeX';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+
+  // Insert before read button
+  const readBtn = actions.querySelector('.paction--read');
+  if (readBtn) actions.insertBefore(btn, readBtn);
+  else actions.appendChild(btn);
+});
+
+
+// ═══════════════════════════════════════════
+// ─── 3. Permalink — anchor-based deep link ─
+// ═══════════════════════════════════════════
+
+// Assign stable DOM ids to every paper item based on arxiv ID
+document.querySelectorAll('.paper-item').forEach(item => {
+  const rawId = item.dataset.id || '';
+  // e.g. https://arxiv.org/abs/2501.12345v1 → anchor "p-2501.12345"
+  const anchor = 'p-' + rawId.replace(/.*abs\//, '').replace(/v\d+$/, '');
+  if (anchor !== 'p-') item.id = anchor;
+});
+
+// Add "链接" copy button to each paper's action row
+document.querySelectorAll('.paper-item').forEach(item => {
+  const anchor = item.id;
+  if (!anchor) return;
+  const actions = item.querySelector('.paper-actions');
+  if (!actions) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'paction paction--permalink permalink-btn';
+  btn.title = '复制论文永久链接';
+  btn.innerHTML = '<i class="ri-link"></i> 链接';
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const url = `${location.origin}${location.pathname}#${anchor}`;
+    navigator.clipboard.writeText(url).then(() => {
+      btn.innerHTML = '<i class="ri-check-line"></i> 已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = '<i class="ri-link"></i> 链接';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+
+  // Insert as the last action button
+  actions.appendChild(btn);
+});
+
+// On page load, if URL has a hash, scroll to and open that paper
+function handleDeepLink() {
+  const hash = location.hash.slice(1);
+  if (!hash || !hash.startsWith('p-')) return;
+  const target = document.getElementById(hash);
+  if (!target) return;
+  // Open all parent details
+  target.closest('.subject-block')?.querySelector('details')?.setAttribute('open', '');
+  target.querySelector('details')?.setAttribute('open', '');
+  // Scroll with a small delay to let layout settle
+  setTimeout(() => {
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('permalink-flash');
+    setTimeout(() => target.classList.remove('permalink-flash'), 1200);
+  }, 120);
+}
+
+handleDeepLink();
+window.addEventListener('hashchange', handleDeepLink);
