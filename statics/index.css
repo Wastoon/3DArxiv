@@ -779,3 +779,37 @@ details[open] { display: block; }
   animation: permalinkFlash 1.2s ease-out;
   border-radius: var(--r-md);
 }
+
+/* ═══════════════════════════════════════════
+   AI TL;DR Panel (Stage 3)
+═══════════════════════════════════════════ */
+
+/* TL;DR 内容文字 */
+.ai-tldr {
+  font-size: .875rem;
+  color: var(--c-text);
+  line-height: 1.75;
+  font-weight: 500;
+  letter-spacing: .01em;
+}
+
+/* AI 按钮有预生成摘要时：显示小亮点 */
+.paction--ai.has-tldr {
+  border-color: var(--c-purple-bd);
+  color: var(--c-purple);
+  background: var(--c-purple-bg);
+}
+.paction--ai.has-tldr::after {
+  content: '';
+  display: inline-block;
+  width: 5px; height: 5px;
+  background: var(--c-purple);
+  border-radius: 50%;
+  margin-left: 3px;
+  vertical-align: middle;
+  animation: tldr-pulse 2s ease-in-out infinite;
+}
+@keyframes tldr-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .5; transform: scale(.8); }
+}
