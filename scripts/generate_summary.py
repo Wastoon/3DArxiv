@@ -28,9 +28,9 @@ API_KEY   = os.environ.get("GEMINI_API_KEY", "")
 API_URL   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 # 每次 Actions 最多处理 N 篇新论文（控制 API 用量和运行时间）
-MAX_NEW_PER_RUN = 80
+MAX_NEW_PER_RUN = 60
 # 请求间隔（秒），避免触发速率限制（免费版 15 req/min）
-REQUEST_INTERVAL = 4.5
+REQUEST_INTERVAL = 5.5
 
 
 def load_json(path: Path, default):
@@ -107,19 +107,9 @@ def call_gemini(title: str, abstract: str) -> str:
         print(f"  [!] HTTP {e.code}: {body[:200]}", file=sys.stderr)
         # 429 速率限制：等待后重试一次
         if e.code == 429:
-            print("  [!] Rate limited, waiting 60s...", file=sys.stderr)
-            time.sleep(60)
-            try:
-                with urllib.request.urlopen(req, timeout=20) as resp2:
-                    result = json.loads(resp2.read())
-                    text = (result.get("candidates", [{}])[0]
-                                 .get("content", {})
-                                 .get("parts", [{}])[0]
-                                 .get("text", "")).strip()
-                    text = re.sub(r'\s+', ' ', text).strip('。').strip()
-                    return (text + '。') if text else ""
-            except Exception:
-                pass
+            print("  [!] Rate limited — will retry in next run.", file=sys.stderr)
+            # 遇到速率限制直接停止本次运行，剩余论文留到下次处理
+            raise SystemExit(0)
         return ""
     except Exception as ex:
         print(f"  [!] Error: {ex}", file=sys.stderr)
