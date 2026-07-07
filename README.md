@@ -67,11 +67,10 @@
 GitHub Actions (UTC 00:00 每日触发)
     │
     ├─ ArxivFeed binary      → 抓取 ArXiv API，生成 index.html + cache.json
-    │
     ├─ generate_graph.py     → Gemini Embedding + ArXiv 搜索
     │   ├─ 计算新论文语义向量
     │   ├─ 搜索历史相关论文并计算相似度
-    │   ├─ 增量更新 data/embeddings.json（持久化到 main 分支）
+    │   ├─ 增量更新 data/embeddings.json（由 GitHub Actions cache 持久化）
     │   └─ 输出 graph.json
     │
     ├─ generate_rss.py       → 生成 rss.xml
@@ -133,9 +132,9 @@ cache_url  = "https://<你的用户名>.github.io/<仓库名>/cache.json"
 
 **Settings → Pages → Branch** 选择 `gh-pages`，保存。
 
-### 5. 创建初始数据文件
+### 5. Embedding 缓存
 
-在仓库根目录创建 `data/` 文件夹，并新建 `data/embeddings.json`，内容为 `{}`。
+`data/embeddings.json` 是自动生成的语义向量缓存，不提交到 Git。GitHub Actions 会从缓存恢复该文件；如果首次运行时不存在，会自动创建 `{}`。
 
 ### 6. 触发首次构建
 
@@ -182,7 +181,7 @@ let top_labs = ["NVIDIA", "MIT", "Stanford", ...];
 │   ├── index.css            # 样式
 │   └── graph.html           # 3D 知识图谱页面
 ├── data/
-│   └── embeddings.json      # 语义向量缓存（自动维护，勿手动编辑）
+│   └── README.md            # data 目录说明；embeddings.json 由 CI 缓存维护
 └── .github/workflows/
     └── update-feed.yml      # GitHub Actions 工作流
 ```

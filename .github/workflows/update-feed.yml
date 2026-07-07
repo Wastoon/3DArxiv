@@ -10,14 +10,19 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-feed
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # ── 1. Checkout main（含 data/embeddings.json）────
+      # ── 1. Checkout main ──────────────────────────────
       - uses: actions/checkout@v3
         with:
           ref: main
+          fetch-depth: 2
 
       # ── 2. Cache & Download ArxivFeed binary ──────────
       - name: Cache ArxivFeed
@@ -61,53 +66,69 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ── 5. Ensure data/ exists ────────────────────────
+      # ── 5. Restore embedding cache ────────────────────
+      - name: Restore embedding cache
+        id: embedding-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/embeddings.json
+          key: ${{ runner.os }}-embedding-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-embedding-cache-
+
+      # ── 6. Seed embedding cache during Git-to-cache migration ──
+      - name: Seed embedding cache from previous commit
+        run: |
+          mkdir -p data
+          if [ ! -f data/embeddings.json ]; then
+            git show HEAD^:data/embeddings.json > data/embeddings.json 2>/dev/null || true
+          fi
+
+      # ── 7. Ensure data/ exists ────────────────────────
       - name: Ensure data directory
         run: |
           mkdir -p data
           [ -f data/embeddings.json ] || echo "{}" > data/embeddings.json
 
-      # ── 6. Generate Graph Data (Semantic Embedding) ───
+      # ── 8. Generate Graph Data (Semantic Embedding) ───
       - name: Generate Graph Data
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/generate_graph.py
 
-      # ── 7. Commit embeddings cache back to main ───────
-      # embeddings.json 存在 main 分支，跨次运行持久化
-      - name: Commit embedding cache
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/embeddings.json
-          git diff --staged --quiet || git commit -m "chore: update embedding cache [skip ci]"
-          git push origin main
+      # ── 9. Save embedding cache ───────────────────────
+      - name: Save embedding cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: data/embeddings.json
+          key: ${{ steps.embedding-cache.outputs.cache-primary-key }}
 
-      # ── 8. Generate RSS Feed ──────────────────────────
+      # ── 10. Generate RSS Feed ─────────────────────────
       - name: Generate RSS Feed
         run: python scripts/generate_rss.py
 
-      # ── 9. Generate AI Summaries ──────────────────────
+      # ── 11. Generate AI Summaries ─────────────────────
       - name: Generate AI Summaries
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/generate_summary.py
 
-      # ── 10. Fetch paper figures (Semantic Scholar) ────
+      # ── 12. Fetch paper figures (Semantic Scholar) ────
       - name: Fetch Paper Figures
         run: python scripts/generate_figures.py
 
-      # ── 11. Fetch Umami site stats ────────────────────
+      # ── 13. Fetch Umami site stats ────────────────────
       - name: Fetch Site Stats
         env:
           UMAMI_API_TOKEN: ${{ secrets.UMAMI_API_TOKEN }}
         run: python scripts/generate_site_stats.py
 
-      # ── 12. Fetch citation graph (Semantic Scholar) ───
+      # ── 14. Fetch citation graph (Semantic Scholar) ───
       - name: Fetch Citations
         run: python scripts/generate_citations.py
 
-      # ── 10. Deploy to GitHub Pages ────────────────────
+      # ── 15. Deploy to GitHub Pages ────────────────────
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -115,7 +136,7 @@ jobs:
           publish_dir: ./target
           force_orphan: true
 
-      # ── 11. Telegram notification ─────────────────────
+      # ── 16. Telegram notification ─────────────────────
       - name: Notify Telegram
         if: github.event_name == 'schedule'
         env:

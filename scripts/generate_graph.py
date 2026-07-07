@@ -5,10 +5,13 @@ generate_graph.py  v2 — Semantic Knowledge Graph
   1. 读取 cache.json 获取本周新论文
   2. 对每篇新论文：用 Gemini embedding 计算向量，ArXiv 搜索历史相关论文
   3. 新论文之间 + 新论文与历史论文之间做相似度计算
-  4. 增量更新 data/embeddings.json
+  4. 增量更新 data/embeddings.json（由 GitHub Actions cache 持久化）
   5. 输出 target/graph.json
 
-环境变量：GEMINI_API_KEY（无则降级为 TF-IDF）
+环境变量：
+  GEMINI_API_KEY（无则降级为 TF-IDF）
+  EMBED_PATH（可选，默认 ./data/embeddings.json）
+  MAX_EMBED_CACHE_ENTRIES（可选，默认 4000）
 """
 
 import json, re, sys, math, time, os
@@ -18,7 +21,7 @@ from datetime import datetime, timezone
 from collections import defaultdict
 
 CACHE_PATH   = Path("./target/cache.json")
-EMBED_PATH   = Path("./data/embeddings.json")
+EMBED_PATH   = Path(os.environ.get("EMBED_PATH", "./data/embeddings.json"))
 OUTPUT_PATH  = Path("./target/graph.json")
 
 GEMINI_API_KEY       = os.environ.get("GEMINI_API_KEY", "")
@@ -32,6 +35,7 @@ MAX_HIST_PER_NEW     = 4
 MAX_TOTAL_NODES      = 1500
 ARXIV_INTERVAL       = 3.5
 EMBED_INTERVAL       = 0.12
+MAX_EMBED_CACHE_ENTRIES = int(os.environ.get("MAX_EMBED_CACHE_ENTRIES", "4000"))
 
 TAG_RULES = [
     ("VLA",            ["vision-language-action","vla"]),
@@ -62,6 +66,24 @@ def load_json(path, default):
     if not path.exists(): return default
     try:    return json.loads(path.read_text(encoding="utf-8"))
     except: return default
+
+def prune_embedding_cache(cache, current_ids, max_entries):
+    if max_entries <= 0 or len(cache) <= max_entries:
+        return cache
+
+    def date_key(item):
+        entry = item[1] if isinstance(item[1], dict) else {}
+        return str(entry.get("date", ""))
+
+    keep = {pid: entry for pid, entry in cache.items() if pid in current_ids}
+    remaining_slots = max(max_entries - len(keep), 0)
+    if remaining_slots == 0:
+        return dict(sorted(keep.items(), key=date_key, reverse=True)[:max_entries])
+
+    candidates = ((pid, entry) for pid, entry in cache.items() if pid not in keep)
+    for pid, entry in sorted(candidates, key=date_key, reverse=True)[:remaining_slots]:
+        keep[pid] = entry
+    return keep
 
 def assign_tags(text):
     low = text.lower()
@@ -351,7 +373,7 @@ def main():
     final_edges = [e for e in edges if e["source"] in final_ids and e["target"] in final_ids]
     clean_nodes = [{k:v for k,v in n.items() if k!="authors_list"} for n in final_nodes]
 
-    # save embedding cache to data/
+    # save embedding cache to data/ (persisted by GitHub Actions cache)
     for hid,vec in hist_emb.items():
         if hid not in emb_cache and hid in historical_papers:
             h = historical_papers[hid]
@@ -359,11 +381,18 @@ def main():
     # 压缩向量：保留4位小数，大幅减小文件体积（精度损失<0.01%）
     compressed = {}
     for pid, entry in emb_cache.items():
+        if not isinstance(entry, dict) or not entry.get("vec"):
+            continue
         compressed[pid] = {
             "vec":   [round(v, 4) for v in entry["vec"]],
-            "title": entry["title"],
-            "date":  entry["date"],
+            "title": entry.get("title", ""),
+            "date":  entry.get("date", ""),
         }
+    current_cache_ids = {p["id"] for p in new_papers} | set(historical_papers.keys())
+    before_prune = len(compressed)
+    compressed = prune_embedding_cache(compressed, current_cache_ids, MAX_EMBED_CACHE_ENTRIES)
+    if len(compressed) < before_prune:
+        print(f"[Graph] Pruned embedding cache: {before_prune} → {len(compressed)} entries")
     EMBED_PATH.parent.mkdir(exist_ok=True)
     EMBED_PATH.write_text(json.dumps(compressed, ensure_ascii=False, separators=(",",":")),
                            encoding="utf-8")

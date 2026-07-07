@@ -7,6 +7,13 @@
 # NotFeed Files
 /target/
 
+# Generated embedding cache. GitHub Actions persists this via actions/cache.
+/data/embeddings.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+
 # Logs
 logs
 *.log
