@@ -56,15 +56,15 @@ jobs:
           tar -zxvf arxivfeed.tgz --strip-components 1 $(tar tf arxivfeed.tgz | grep /arxivfeed)
           chmod +x arxivfeed
 
-      # ── 3. Build HTML + cache.json ────────────────────
-      - name: Build rss
-        run: ./arxivfeed
-
-      # ── 4. Set up Python ──────────────────────────────
+      # ── 3. Set up Python ──────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
+
+      # ── 4. Build HTML + cache.json ────────────────────
+      - name: Build rss
+        run: python scripts/run_arxivfeed_serial.py
 
       # ── 5. Restore embedding cache ────────────────────
       - name: Restore embedding cache
