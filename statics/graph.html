@@ -538,8 +538,9 @@ let simAlpha = 1;
 let layoutReady = false;
 let initialCameraCentered = false;
 let lastFrameTime = 0;
-const MIN_ALPHA = 0.018;
-const REHEAT_ALPHA = 0.45;
+const MIN_ALPHA = 0.004;
+const REHEAT_ALPHA = 0.18;
+const NODE_DRAG_THRESHOLD = 5;
 
 // ── Canvas setup ────────────────────────────────────────
 const canvas = document.getElementById('graph-canvas');
@@ -732,7 +733,8 @@ function forceFrame(now) {
     const dx = b.x - a.x, dy = b.y - a.y;
     const d  = Math.sqrt(dx*dx + dy*dy) + 0.01;
     const rest = edgeIdealLength(e, IDEAL);
-    const stiffness = e.type === 'author' ? 0.034 : e.type === 'historical' ? 0.018 : 0.026;
+    const baseStiffness = e.type === 'author' ? 0.034 : e.type === 'historical' ? 0.018 : 0.026;
+    const stiffness = baseStiffness * (layoutReady ? 0.42 : 1);
     const f  = (d - rest) * stiffness * alpha;
     const fx = f * dx / d * dt, fy = f * dy / d * dt;
     if (!a.fixed) { a.vx += fx; a.vy += fy; }
@@ -740,7 +742,7 @@ function forceFrame(now) {
   });
 
   // ── 中心弱引力 + 轻微呼吸扰动，避免完全凝固成静态图 ──
-  const breathe = layoutReady ? Math.sin(now / 1700) * 0.00018 : 0;
+  const breathe = layoutReady ? Math.sin(now / 1700) * 0.00004 : 0;
   visible.forEach(n => {
     if (n.fixed) return;
     n.vx -= n.x * (GRAVITY + breathe) * alpha * dt;
@@ -748,10 +750,10 @@ function forceFrame(now) {
   });
 
   // ── 积分 + 限速 + 阻尼 ──
-  const maxV = IDEAL * (layoutReady ? 0.14 : 0.5);
+  const maxV = IDEAL * (layoutReady ? 0.025 : 0.5);
   visible.forEach(n => {
     if (n.fixed) { n.vx = 0; n.vy = 0; return; }
-    const damping = layoutReady ? 0.88 : 0.72;
+    const damping = layoutReady ? 0.74 : 0.72;
     n.vx *= damping;
     n.vy *= damping;
     const spd = Math.sqrt(n.vx*n.vx + n.vy*n.vy);
@@ -760,7 +762,7 @@ function forceFrame(now) {
     n.y += n.vy * dt;
   });
 
-  simAlpha = Math.max(MIN_ALPHA, simAlpha * (layoutReady ? 0.997 : 0.985));
+  simAlpha = Math.max(MIN_ALPHA, simAlpha * (layoutReady ? 0.94 : 0.985));
 
   if (!layoutReady && simTick >= MAX_TICKS) {
     layoutReady = true;
@@ -947,7 +949,6 @@ canvas.addEventListener('mousedown', e => {
     hit.vx = 0; hit.vy = 0;
     selectedId = hit.id;
     canvas.style.cursor='grabbing';
-    reheatSimulation(0.6);
   } else {
     dragMode = 'camera';
     camStart  = {x:camX, y:camY};
@@ -961,8 +962,10 @@ canvas.addEventListener('mousemove', e => {
     draggedNode.y = y;
     draggedNode.vx = 0;
     draggedNode.vy = 0;
-    nodeDragMoved = nodeDragMoved || (Math.abs(e.clientX-dragStart.x)+Math.abs(e.clientY-dragStart.y)) > 4;
-    reheatSimulation(0.5);
+    const movedPx = Math.abs(e.clientX-dragStart.x)+Math.abs(e.clientY-dragStart.y);
+    const wasDragging = nodeDragMoved;
+    nodeDragMoved = nodeDragMoved || movedPx > NODE_DRAG_THRESHOLD;
+    if (nodeDragMoved) reheatSimulation(wasDragging ? 0.08 : 0.16);
     draw();
   } else if (dragStart && dragMode === 'camera') {
     camX = camStart.x + (e.clientX - dragStart.x);
@@ -979,9 +982,12 @@ canvas.addEventListener('mouseup', e => {
   const moved = dragStart && (Math.abs(e.clientX-dragStart.x)+Math.abs(e.clientY-dragStart.y)) > 4;
   if (dragMode === 'node' && draggedNode) {
     draggedNode.fixed = false;
-    draggedNode.vx += (Math.random() - 0.5) * 0.6;
-    draggedNode.vy += (Math.random() - 0.5) * 0.6;
-    reheatSimulation(nodeDragMoved ? 0.75 : 0.35);
+    if (nodeDragMoved) {
+      // 释放时只给一个很小的局部速度，避免把整张图重新“烧热”。
+      draggedNode.vx += (Math.random() - 0.5) * 0.08;
+      draggedNode.vy += (Math.random() - 0.5) * 0.08;
+      reheatSimulation(0.14);
+    }
   }
   dragStart=null; camStart=null;
   dragMode=null; draggedNode=null; nodeDragMoved=false;
@@ -996,7 +1002,7 @@ canvas.addEventListener('mouseup', e => {
 canvas.addEventListener('mouseleave', ()=>{
   if (draggedNode) {
     draggedNode.fixed = false;
-    reheatSimulation(0.45);
+    if (nodeDragMoved) reheatSimulation(0.12);
   }
   dragStart=null;
   dragMode=null; draggedNode=null; nodeDragMoved=false;
@@ -1216,19 +1222,19 @@ function applyVisibility() {
   document.getElementById('empty-state').style.display = empty ? 'block' : 'none';
   nodes.forEach(n => {
     if (visibleNodeIds.has(n.id)) {
-      n.vx += (Math.random() - 0.5) * 0.4;
-      n.vy += (Math.random() - 0.5) * 0.4;
+      n.vx += (Math.random() - 0.5) * 0.12;
+      n.vy += (Math.random() - 0.5) * 0.12;
     }
   });
-  if (!empty) reheatSimulation(0.55);
+  if (!empty) reheatSimulation(0.2);
 }
 
 // ── Edge type toggles ────────────────────────────────────
 document.getElementById('tog-similar').addEventListener('change', e => {
-  showSimilar = e.target.checked; reheatSimulation(0.5); draw();
+  showSimilar = e.target.checked; reheatSimulation(0.16); draw();
 });
 document.getElementById('tog-author').addEventListener('change', e => {
-  showAuthor = e.target.checked; reheatSimulation(0.5); draw();
+  showAuthor = e.target.checked; reheatSimulation(0.16); draw();
 });
 
 // ── Highlight featured ────────────────────────────────────
@@ -1255,7 +1261,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     simRunning = false;
   } else {
-    reheatSimulation(0.3);
+    reheatSimulation(0.1);
   }
 });
 
