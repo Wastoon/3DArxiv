@@ -526,13 +526,20 @@ let searchQuery = '';
 // Camera
 let camX=0, camY=0, camScale=1;
 let dragStart=null, camStart=null;
+let dragMode=null, draggedNode=null, nodeDragMoved=false;
 let pinchDist0=null, camScale0=null;
 let animFrame=null;
 
-// Force sim
+// Force sim — keep a low-energy elastic layout alive after initial settling.
 let simRunning = false;
 let simTick = 0;
 const MAX_TICKS = 300;
+let simAlpha = 1;
+let layoutReady = false;
+let initialCameraCentered = false;
+let lastFrameTime = 0;
+const MIN_ALPHA = 0.018;
+const REHEAT_ALPHA = 0.45;
 
 // ── Canvas setup ────────────────────────────────────────
 const canvas = document.getElementById('graph-canvas');
@@ -642,97 +649,136 @@ function nodeColor(n) {
 
 // ── Force simulation ─────────────────────────────────────
 function runForce() {
+  if (simRunning) return;
   simRunning = true;
   simTick = 0;
+  simAlpha = 1;
+  layoutReady = false;
+  initialCameraCentered = false;
+  lastFrameTime = performance.now();
+  requestAnimationFrame(forceFrame);
+}
 
-  // 参数随节点数自动调整
-  const N       = nodes.length;
-  const IDEAL   = Math.max(80, Math.sqrt(N) * 8);  // 理想边长：节点越多间距越大
-  const REPULSE = N * 120;                           // 斥力：线性正比于节点数
-  const GRAVITY = 0.003;                             // 中心弱引力：只防飘散
-
-  function tick() {
-    if (!simRunning || simTick++ > MAX_TICKS) {
-      simRunning = false;
-      setProgress(100, '图谱就绪');
-      setTimeout(() => {
-        document.getElementById('loading').style.display = 'none';
-        centerCamera();
-      }, 300);
-      return;
-    }
-
-    const alpha = Math.max(0.02, 1 - simTick / MAX_TICKS);
-
-    // ── 斥力：网格加速，只计算邻近格子 ──
-    const CELL = IDEAL * 2;
-    const grid = new Map();
-    nodes.forEach(n => {
-      const cx = Math.floor(n.x / CELL);
-      const cy = Math.floor(n.y / CELL);
-      const key = cx + ',' + cy;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key).push(n);
-    });
-    nodes.forEach(a => {
-      const cx = Math.floor(a.x / CELL);
-      const cy = Math.floor(a.y / CELL);
-      for (let ddx = -2; ddx <= 2; ddx++) {
-        for (let ddy = -2; ddy <= 2; ddy++) {
-          const neighbors = grid.get((cx+ddx)+','+(cy+ddy));
-          if (!neighbors) continue;
-          neighbors.forEach(b => {
-            if (b === a) return;
-            const rx = a.x - b.x, ry = a.y - b.y;
-            const d2 = rx*rx + ry*ry + 1;
-            const d  = Math.sqrt(d2);
-            const f  = REPULSE / d2;
-            a.vx += f * rx / d;
-            a.vy += f * ry / d;
-          });
-        }
-      }
-    });
-
-    // ── 引力（边，只拉近不反推）──
-    edges.forEach(e => {
-      if (!e.sourceNode || !e.targetNode) return;
-      if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return;
-      const a = e.sourceNode, b = e.targetNode;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const d  = Math.sqrt(dx*dx + dy*dy) + 0.01;
-      if (d > IDEAL) {
-        const f  = (d - IDEAL) * 0.03 * alpha;
-        const fx = f * dx / d, fy = f * dy / d;
-        a.vx += fx; a.vy += fy;
-        b.vx -= fx; b.vy -= fy;
-      }
-    });
-
-    // ── 中心弱引力 ──
-    nodes.forEach(n => {
-      n.vx -= n.x * GRAVITY * alpha;
-      n.vy -= n.y * GRAVITY * alpha;
-    });
-
-    // ── 积分 + 限速 + 阻尼 ──
-    const maxV = IDEAL * 0.5;
-    nodes.forEach(n => {
-      n.vx *= 0.7;
-      n.vy *= 0.7;
-      const spd = Math.sqrt(n.vx*n.vx + n.vy*n.vy);
-      if (spd > maxV) { n.vx = n.vx/spd*maxV; n.vy = n.vy/spd*maxV; }
-      n.x += n.vx;
-      n.y += n.vy;
-    });
-
-    if (simTick % 10 === 0) {
-      setProgress(80 + (simTick / MAX_TICKS) * 18, `布局中… ${simTick}/${MAX_TICKS}`);
-    }
-    draw();
-    requestAnimationFrame(tick);
+function reheatSimulation(alpha = REHEAT_ALPHA) {
+  simAlpha = Math.max(simAlpha, alpha);
+  if (!simRunning) {
+    simRunning = true;
+    lastFrameTime = performance.now();
+    requestAnimationFrame(forceFrame);
   }
-  requestAnimationFrame(tick);
+}
+
+function edgeIdealLength(edge, base) {
+  if (edge.type === 'author') return base * 0.72;
+  if (edge.type === 'historical') return base * 1.25;
+  const weight = Math.max(0, Math.min(1, edge.weight || 0));
+  return base * (1.28 - weight * 0.42);
+}
+
+function forceFrame(now) {
+  if (!simRunning) return;
+  const elapsed = Math.min(48, Math.max(12, now - lastFrameTime || 16.7));
+  lastFrameTime = now;
+  const dt = elapsed / 16.7;
+  simTick += 1;
+
+  // 参数随节点数自动调整。稳定后仍保留 MIN_ALPHA，形成持续弹性。
+  const N       = Math.max(nodes.length, 1);
+  const IDEAL   = Math.max(80, Math.sqrt(N) * 8);
+  const REPULSE = N * 115;
+  const GRAVITY = 0.0035;
+  const alpha   = Math.max(MIN_ALPHA, simAlpha);
+  const visible = nodes.filter(n => visibleNodeIds.has(n.id));
+
+  // ── 斥力：网格加速，只计算邻近格子 ──
+  const CELL = IDEAL * 2;
+  const grid = new Map();
+  visible.forEach(n => {
+    const cx = Math.floor(n.x / CELL);
+    const cy = Math.floor(n.y / CELL);
+    const key = cx + ',' + cy;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(n);
+  });
+  visible.forEach(a => {
+    if (a.fixed) return;
+    const cx = Math.floor(a.x / CELL);
+    const cy = Math.floor(a.y / CELL);
+    for (let ddx = -2; ddx <= 2; ddx++) {
+      for (let ddy = -2; ddy <= 2; ddy++) {
+        const neighbors = grid.get((cx+ddx)+','+(cy+ddy));
+        if (!neighbors) continue;
+        neighbors.forEach(b => {
+          if (b === a) return;
+          const rx = a.x - b.x, ry = a.y - b.y;
+          const minD = a.radius + b.radius + 16;
+          const d2 = Math.max(rx*rx + ry*ry, minD*minD);
+          const d  = Math.sqrt(d2);
+          const f  = REPULSE / d2 * alpha;
+          a.vx += f * rx / d * dt;
+          a.vy += f * ry / d * dt;
+        });
+      }
+    }
+  });
+
+  // ── 弹簧边：既会拉近过远节点，也会推开过近节点 ──
+  edges.forEach(e => {
+    if (!e.sourceNode || !e.targetNode) return;
+    if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return;
+    if (e.type==='similar' && !showSimilar) return;
+    if (e.type==='author'  && !showAuthor)  return;
+    const a = e.sourceNode, b = e.targetNode;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d  = Math.sqrt(dx*dx + dy*dy) + 0.01;
+    const rest = edgeIdealLength(e, IDEAL);
+    const stiffness = e.type === 'author' ? 0.034 : e.type === 'historical' ? 0.018 : 0.026;
+    const f  = (d - rest) * stiffness * alpha;
+    const fx = f * dx / d * dt, fy = f * dy / d * dt;
+    if (!a.fixed) { a.vx += fx; a.vy += fy; }
+    if (!b.fixed) { b.vx -= fx; b.vy -= fy; }
+  });
+
+  // ── 中心弱引力 + 轻微呼吸扰动，避免完全凝固成静态图 ──
+  const breathe = layoutReady ? Math.sin(now / 1700) * 0.00018 : 0;
+  visible.forEach(n => {
+    if (n.fixed) return;
+    n.vx -= n.x * (GRAVITY + breathe) * alpha * dt;
+    n.vy -= n.y * (GRAVITY - breathe) * alpha * dt;
+  });
+
+  // ── 积分 + 限速 + 阻尼 ──
+  const maxV = IDEAL * (layoutReady ? 0.14 : 0.5);
+  visible.forEach(n => {
+    if (n.fixed) { n.vx = 0; n.vy = 0; return; }
+    const damping = layoutReady ? 0.88 : 0.72;
+    n.vx *= damping;
+    n.vy *= damping;
+    const spd = Math.sqrt(n.vx*n.vx + n.vy*n.vy);
+    if (spd > maxV) { n.vx = n.vx/spd*maxV; n.vy = n.vy/spd*maxV; }
+    n.x += n.vx * dt;
+    n.y += n.vy * dt;
+  });
+
+  simAlpha = Math.max(MIN_ALPHA, simAlpha * (layoutReady ? 0.997 : 0.985));
+
+  if (!layoutReady && simTick >= MAX_TICKS) {
+    layoutReady = true;
+    setProgress(100, '图谱就绪');
+    setTimeout(() => {
+      document.getElementById('loading').style.display = 'none';
+    }, 300);
+  }
+  if (!initialCameraCentered && simTick >= 80) {
+    initialCameraCentered = true;
+    centerCamera();
+  }
+  if (!layoutReady && simTick % 10 === 0) {
+    setProgress(80 + Math.min(simTick / MAX_TICKS, 1) * 18, `布局中… ${Math.min(simTick, MAX_TICKS)}/${MAX_TICKS}`);
+  }
+
+  draw();
+  requestAnimationFrame(forceFrame);
 }
 
 // ── Camera ───────────────────────────────────────────────
@@ -744,6 +790,7 @@ function centerCamera() {
     minX=Math.min(minX,n.x); maxX=Math.max(maxX,n.x);
     minY=Math.min(minY,n.y); maxY=Math.max(maxY,n.y);
   });
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
   const pw = W - (document.getElementById('detail-panel').classList.contains('open') ? 360 : 0) - 220;
   const ph = H - 52;
   const scaleX = pw / (maxX-minX+80);
@@ -890,11 +937,34 @@ function hitTest(wx, wy) {
 // Mouse / touch
 canvas.addEventListener('mousedown', e => {
   dragStart = {x:e.clientX, y:e.clientY};
-  camStart  = {x:camX, y:camY};
-  canvas.style.cursor='grabbing';
+  const {x,y} = toWorld(e.clientX, e.clientY);
+  const hit = hitTest(x,y);
+  if (hit) {
+    dragMode = 'node';
+    draggedNode = hit;
+    nodeDragMoved = false;
+    hit.fixed = true;
+    hit.vx = 0; hit.vy = 0;
+    selectedId = hit.id;
+    canvas.style.cursor='grabbing';
+    reheatSimulation(0.6);
+  } else {
+    dragMode = 'camera';
+    camStart  = {x:camX, y:camY};
+    canvas.style.cursor='grabbing';
+  }
 });
 canvas.addEventListener('mousemove', e => {
-  if (dragStart) {
+  if (dragStart && dragMode === 'node' && draggedNode) {
+    const {x,y} = toWorld(e.clientX, e.clientY);
+    draggedNode.x = x;
+    draggedNode.y = y;
+    draggedNode.vx = 0;
+    draggedNode.vy = 0;
+    nodeDragMoved = nodeDragMoved || (Math.abs(e.clientX-dragStart.x)+Math.abs(e.clientY-dragStart.y)) > 4;
+    reheatSimulation(0.5);
+    draw();
+  } else if (dragStart && dragMode === 'camera') {
     camX = camStart.x + (e.clientX - dragStart.x);
     camY = camStart.y + (e.clientY - dragStart.y);
     draw();
@@ -907,7 +977,14 @@ canvas.addEventListener('mousemove', e => {
 });
 canvas.addEventListener('mouseup', e => {
   const moved = dragStart && (Math.abs(e.clientX-dragStart.x)+Math.abs(e.clientY-dragStart.y)) > 4;
+  if (dragMode === 'node' && draggedNode) {
+    draggedNode.fixed = false;
+    draggedNode.vx += (Math.random() - 0.5) * 0.6;
+    draggedNode.vy += (Math.random() - 0.5) * 0.6;
+    reheatSimulation(nodeDragMoved ? 0.75 : 0.35);
+  }
   dragStart=null; camStart=null;
+  dragMode=null; draggedNode=null; nodeDragMoved=false;
   canvas.style.cursor='grab';
   if (!moved) {
     const {x,y} = toWorld(e.clientX, e.clientY);
@@ -917,7 +994,12 @@ canvas.addEventListener('mouseup', e => {
   }
 });
 canvas.addEventListener('mouseleave', ()=>{
+  if (draggedNode) {
+    draggedNode.fixed = false;
+    reheatSimulation(0.45);
+  }
   dragStart=null;
+  dragMode=null; draggedNode=null; nodeDragMoved=false;
   hideTooltip();
 });
 canvas.addEventListener('wheel', e => {
@@ -1132,14 +1214,21 @@ function applyVisibility() {
   );
   const empty = visibleNodeIds.size === 0;
   document.getElementById('empty-state').style.display = empty ? 'block' : 'none';
+  nodes.forEach(n => {
+    if (visibleNodeIds.has(n.id)) {
+      n.vx += (Math.random() - 0.5) * 0.4;
+      n.vy += (Math.random() - 0.5) * 0.4;
+    }
+  });
+  if (!empty) reheatSimulation(0.55);
 }
 
 // ── Edge type toggles ────────────────────────────────────
 document.getElementById('tog-similar').addEventListener('change', e => {
-  showSimilar = e.target.checked; draw();
+  showSimilar = e.target.checked; reheatSimulation(0.5); draw();
 });
 document.getElementById('tog-author').addEventListener('change', e => {
-  showAuthor = e.target.checked; draw();
+  showAuthor = e.target.checked; reheatSimulation(0.5); draw();
 });
 
 // ── Highlight featured ────────────────────────────────────
@@ -1157,6 +1246,16 @@ document.addEventListener('keydown', e => {
   if (e.key==='Escape') clearSelection();
   if (e.key==='/' && document.activeElement!==searchInput) {
     e.preventDefault(); searchInput.focus();
+  }
+});
+
+// Pause physics when the tab is hidden to avoid wasting CPU; resume with
+// enough energy for the graph to continue its elastic settling.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    simRunning = false;
+  } else {
+    reheatSimulation(0.3);
   }
 });
 
