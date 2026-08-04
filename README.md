@@ -13,9 +13,9 @@
 ## 功能概览
 
 ### 📄 论文列表页
-- **每日自动更新**，追踪 14 个领域的最新论文
+- **每日自动更新**，追踪 17 个领域的最新论文
 - **全文搜索**：标题、作者、摘要、领域实时过滤，支持搜索历史
-- **子方向标签**：VLA / Humanoid / Manipulation / NeRF·3DGS / Digital Human / Gaussian Avatar 等 14 个子方向一键筛选
+- **子方向标签**：VLA / Humanoid / Manipulation / NeRF·3DGS / Digital Human / Gaussian Avatar / AIGC / LLM Agent 等 17 个子方向一键筛选
 - **精选过滤**：顶级作者（★）、顶级机构（★）、顶会论文（★★）快速定位
 - **BibTeX 一键复制**：点击即生成标准 `@article` 引用格式
 - **永久链接**：每篇论文有固定 URL anchor，可直接分享跳转
@@ -55,7 +55,10 @@
 | Embodied Intelligence | 50 | 具身智能、VLA、灵巧操作 |
 | End-to-End AD | 50 | 端到端自动驾驶、BEV、Occupancy |
 | Foundation Models | 50 | 多模态基础模型、通用智能体 |
+| RL for AIGC | 50 | 生成式模型/AIGC 中的强化学习、奖励模型与偏好优化 |
+| LLM Agents with Reinforcement Learning | 50 | LLM Agent、工具使用、规划与交互中的强化学习 |
 | Computation and Language (`cs.CL`) | 150 | NLP |
+| Information Retrieval (`cs.IR`) | 150 | 信息检索 |
 | Machine Learning (`cs.LG`) | 150 | 机器学习 |
 | Multimedia (`cs.MM`) | 150 | 多媒体 |
 

@@ -78,6 +78,16 @@ category = "(cat:cs.RO+OR+cat:cs.AI+OR+cat:cs.LG)+AND+(foundation+model+OR+multi
 title = "Foundation Models"
 
 [[sources]]
+limit = 50
+category = "(cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.AI)+AND+(diffusion+OR+generative+model+OR+AIGC+OR+image+generation+OR+video+generation)+AND+(reinforcement+learning+OR+RL+OR+reward+model+OR+preference+optimization)"
+title = "RL for AIGC"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.AI+OR+cat:cs.CL)+AND+(LLM+OR+language+model+OR+agent+OR+tool+use)+AND+(reinforcement+learning+OR+RL+OR+planning+OR+decision+making+OR+interaction)"
+title = "LLM Agents with Reinforcement Learning"
+
+[[sources]]
 limit = 150
 category = "cs.CL"
 title = "Computation and Language"
@@ -96,17 +106,6 @@ title = "Machine Learning"
 limit = 150
 category = "cs.MM"
 title = "Multimedia"
-
-[[sources]]
-limit = 50
-category = "(cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.AI)+AND+(diffusion+OR+generative+model+OR+AIGC+OR+image+generation+OR+video+generation)+AND+(reinforcement+learning+OR+RL+OR+reward+model+OR+preference+optimization)"
-title = "RL for AIGC"
-
-[[sources]]
-limit = 50
-category = "(cat:cs.AI+OR+cat:cs.CL)+AND+(LLM+OR+language+model+OR+agent+OR+tool+use)+AND+(reinforcement+learning+OR+RL+OR+planning+OR+decision+making+OR+interaction)"
-title = "LLM Agents with Reinforcement Learning"
-
 
 [scripts]
 highlight_title = "scripts/highlight_title.rhai"
