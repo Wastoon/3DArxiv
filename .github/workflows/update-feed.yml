@@ -5,7 +5,7 @@ on:
     branches:
       - main
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "30 1 * * *"
 
 permissions:
   contents: write
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # ── 1. Checkout main ──────────────────────────────
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 2
@@ -27,7 +27,7 @@ jobs:
       # ── 2. Cache & Download ArxivFeed binary ──────────
       - name: Cache ArxivFeed
         id: cache-arxivfeed
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ./arxivfeed
           key: ${{ runner.os }}-arxivfeed-v1
@@ -58,7 +58,7 @@ jobs:
 
       # ── 3. Set up Python ──────────────────────────────
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -130,7 +130,7 @@ jobs:
 
       # ── 15. Deploy to GitHub Pages ────────────────────
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target
