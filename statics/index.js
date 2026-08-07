@@ -202,6 +202,19 @@ searchInput?.addEventListener('keydown', e => {
   }
 });
 
+// ─── External arXiv search ─────────────
+const arxivSearchForm = document.querySelector('.arxiv-search-wrap');
+const arxivSearchInput = document.getElementById('arxiv-search-input');
+arxivSearchForm?.addEventListener('submit', e => {
+  const q = arxivSearchInput?.value.trim() || '';
+  if (!q) {
+    e.preventDefault();
+    arxivSearchInput?.focus();
+    return;
+  }
+  arxivSearchInput.value = q;
+});
+
 // ─── Search + Featured filter ──────────
 const featuredToggle = document.getElementById('featured-toggle');
 let featuredOnly = false;

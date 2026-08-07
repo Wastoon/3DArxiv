@@ -47,6 +47,15 @@
                 <kbd class="search-shortcut">/</kbd>
                 <div id="search-history-dropdown" class="search-history-dropdown hidden"></div>
             </div>
+            <form class="arxiv-search-wrap" action="https://arxiv.org/search/" method="get" target="_blank" rel="noopener" title="在 arXiv 官网搜索论文">
+                <i class="ri-global-line arxiv-search-icon"></i>
+                <input type="hidden" name="searchtype" value="all"/>
+                <input type="hidden" name="source" value="header"/>
+                <input type="text" id="arxiv-search-input" name="query" placeholder="搜索 arXiv 全站…" autocomplete="off" spellcheck="false" required/>
+                <button type="submit" class="arxiv-search-submit" aria-label="搜索 arXiv">
+                    <i class="ri-external-link-line"></i>
+                </button>
+            </form>
             <button id="featured-toggle" title="只看精选 (顶级作者 / 顶会)">
                 <i class="ri-award-line"></i><span>精选</span>
             </button>
