@@ -38,6 +38,11 @@ CACHE_PATH = TARGET_DIR / "cache.json"
 REQUEST_INTERVAL_SECONDS = 5
 RETRY_BACKOFF_SECONDS = 30
 MAX_ATTEMPTS_PER_SOURCE = 4
+TRANSIENT_XML_ERRORS = (
+    "Unexpected end of stream",
+    "Unexpected characters outside the root element",
+    "no root element found",
+)
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -114,10 +119,15 @@ def start_cache_server() -> tuple[http.server.ThreadingHTTPServer, str]:
     return server, f"http://{host}:{port}/cache.json"
 
 
-def run_source(config: dict[str, Any], source: dict[str, Any], cache_url: str) -> None:
+def is_transient_arxiv_error(output: str) -> bool:
+    return any(marker in output for marker in TRANSIENT_XML_ERRORS)
+
+
+def run_source(config: dict[str, Any], source: dict[str, Any], cache_url: str) -> bool:
     write_single_source_config(config, source, cache_url)
     title = source["title"]
     category = source["category"]
+    last_output = ""
 
     for attempt in range(1, MAX_ATTEMPTS_PER_SOURCE + 1):
         print(
@@ -125,11 +135,28 @@ def run_source(config: dict[str, Any], source: dict[str, Any], cache_url: str) -
             f"attempt {attempt}/{MAX_ATTEMPTS_PER_SOURCE}",
             flush=True,
         )
-        completed = subprocess.run(["./arxivfeed"], cwd=ROOT, check=False)
+        completed = subprocess.run(
+            ["./arxivfeed"],
+            cwd=ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        last_output = completed.stdout or ""
+        if last_output:
+            print(last_output, end="" if last_output.endswith("\n") else "\n", flush=True)
         if completed.returncode == 0:
-            return
+            return True
 
         if attempt == MAX_ATTEMPTS_PER_SOURCE:
+            if is_transient_arxiv_error(last_output):
+                print(
+                    f"Warning: skipping {title} after repeated transient arXiv XML responses; "
+                    "keeping the previously cached data for this source.",
+                    flush=True,
+                )
+                return False
             raise subprocess.CalledProcessError(completed.returncode, "./arxivfeed")
 
         backoff = RETRY_BACKOFF_SECONDS * attempt
