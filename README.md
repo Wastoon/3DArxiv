@@ -79,6 +79,8 @@
 | Embodied Intelligence | 50 | 具身智能、VLA、灵巧操作 |
 | End-to-End AD | 50 | 端到端自动驾驶、BEV、Occupancy、规划 |
 | Foundation Models | 50 | 多模态基础模型与通用智能体 |
+| Spatial AI | 50 | 空间智能、空间推理、3D 场景理解与世界模型 |
+| Spatial Agents | 50 | 空间智能体、具身智能体、视觉语言导航与交互规划 |
 | RL for AIGC | 50 | AIGC / 生成式模型中的强化学习、奖励模型与偏好优化 |
 | LLM Agents with Reinforcement Learning | 50 | LLM Agent、工具使用、规划、交互与强化学习 |
 | Computation and Language (`cs.CL`) | 150 | NLP 与语言模型 |

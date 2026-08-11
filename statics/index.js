@@ -632,6 +632,8 @@ const TAG_RULES = [
   { tag: 'AIGC',           keywords: ['aigc','generative model','image generation','video generation','text-to-image','text to image'] },
   { tag: 'LLM Agent',      keywords: ['llm agent','language model agent','tool use','tool-use','agentic','decision making','planning'] },
   { tag: 'Reward Model',   keywords: ['reward model','preference optimization','preference learning','rlhf','rlaif'] },
+  { tag: 'Spatial AI',     keywords: ['spatial ai','spatial intelligence','spatial reasoning','spatial understanding','spatial world model','3d scene understanding'] },
+  { tag: 'Spatial Agent',  keywords: ['spatial agent','spatial agents','embodied agent','3d agent','vision-language navigation','object navigation'] },
   { tag: 'Sim-to-Real',    keywords: ['sim-to-real','sim2real','simulation to real','domain randomization','domain adaptation'] },
   { tag: 'RL',             keywords: ['reinforcement learning','policy gradient','ppo','sac','rl agent','reward shaping'] },
   { tag: 'Transformer',    keywords: ['transformer','attention mechanism','self-attention','cross-attention','vision transformer','vit'] },

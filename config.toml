@@ -79,6 +79,16 @@ title = "Foundation Models"
 
 [[sources]]
 limit = 50
+category = "(cat:cs.CV+OR+cat:cs.AI+OR+cat:cs.RO+OR+cat:cs.LG+OR+cat:cs.GR)+AND+(spatial+AI+OR+spatial+intelligence+OR+spatial+reasoning+OR+3D+scene+understanding+OR+spatial+understanding+OR+spatial+world+model)"
+title = "Spatial AI"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.AI+OR+cat:cs.RO+OR+cat:cs.CV+OR+cat:cs.CL)+AND+(spatial+agent+OR+spatial+agents+OR+embodied+agent+OR+3D+agent+OR+vision-language+navigation+OR+object+navigation)+AND+(planning+OR+reasoning+OR+interaction+OR+navigation+OR+tool+use)"
+title = "Spatial Agents"
+
+[[sources]]
+limit = 50
 category = "(cat:cs.CV+OR+cat:cs.LG+OR+cat:cs.AI)+AND+(diffusion+OR+generative+model+OR+AIGC+OR+image+generation+OR+video+generation)+AND+(reinforcement+learning+OR+RL+OR+reward+model+OR+preference+optimization)"
 title = "RL for AIGC"
 
