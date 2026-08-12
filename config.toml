@@ -98,6 +98,21 @@ category = "(cat:cs.AI+OR+cat:cs.CL)+AND+(LLM+OR+language+model+OR+agent+OR+tool
 title = "LLM Agents with Reinforcement Learning"
 
 [[sources]]
+limit = 50
+category = "(cat:cs.IR+OR+cat:cs.LG+OR+cat:cs.AI)+AND+(generative+OR+large+language+model+OR+LLM+OR+diffusion)+AND+(recommender+system+OR+recommendation+OR+personalized+recommendation+OR+sequential+recommendation)"
+title = "Generative Recommendation Systems"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.IR+OR+cat:cs.CL+OR+cat:cs.AI)+AND+(generative+search+OR+generative+retrieval+OR+neural+search+OR+LLM+search+OR+search+engine)+AND+(retrieval+OR+ranking+OR+query+understanding+OR+answer+generation)"
+title = "Generative Search Engines"
+
+[[sources]]
+limit = 50
+category = "(cat:cs.IR+OR+cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CY)+AND+(POI+OR+point+of+interest+OR+location+recommendation+OR+geospatial+recommendation)+AND+(generative+OR+LLM+OR+large+language+model+OR+search+OR+recommendation)"
+title = "Generative POI Search and Recommendation"
+
+[[sources]]
 limit = 150
 category = "cs.CL"
 title = "Computation and Language"

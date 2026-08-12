@@ -83,6 +83,9 @@
 | Spatial Agents | 50 | 空间智能体、具身智能体、视觉语言导航与交互规划 |
 | RL for AIGC | 50 | AIGC / 生成式模型中的强化学习、奖励模型与偏好优化 |
 | LLM Agents with Reinforcement Learning | 50 | LLM Agent、工具使用、规划、交互与强化学习 |
+| Generative Recommendation Systems | 50 | 生成式推荐系统、个性化推荐与序列推荐 |
+| Generative Search Engines | 50 | 生成式搜索、生成式检索、神经搜索与答案生成 |
+| Generative POI Search and Recommendation | 50 | 生成式 POI 搜索、位置推荐与地理空间推荐 |
 | Computation and Language (`cs.CL`) | 150 | NLP 与语言模型 |
 | Information Retrieval (`cs.IR`) | 150 | 信息检索与搜索系统 |
 | Machine Learning (`cs.LG`) | 150 | 机器学习通用方向 |
